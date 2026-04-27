@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.pfe.predictive</groupId>
+        <artifactId>predictive-maintenance-backend</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>alert-module</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>Alert Module</name>
+    <description>Alert Management Module</description>
+
+    <dependencies>
+        <!-- Shared permissions/utilities -->
+        <dependency>
+            <groupId>com.pfe.predictive</groupId>
+            <artifactId>common-module</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- Core Module -->
+        <dependency>
+            <groupId>com.pfe.predictive</groupId>
+            <artifactId>core-module</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- Data Module -->
+        <dependency>
+            <groupId>com.pfe.predictive</groupId>
+            <artifactId>data-module</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Data JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Spring Security -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- ✅ DISABLE REPACKAGE - This is a library module, not a main app -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

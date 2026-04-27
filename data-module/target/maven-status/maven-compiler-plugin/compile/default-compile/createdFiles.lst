@@ -1,0 +1,7 @@
+com\pfe\predictive\data\repository\SensorRepository.class
+com\pfe\predictive\data\repository\PredictionRecordRepository.class
+com\pfe\predictive\data\repository\RoleRepository.class
+com\pfe\predictive\data\repository\UserRepository.class
+com\pfe\predictive\data\repository\MachineRepository.class
+com\pfe\predictive\data\repository\SensorDataRepository.class
+com\pfe\predictive\data\repository\MaintenanceRepository.class

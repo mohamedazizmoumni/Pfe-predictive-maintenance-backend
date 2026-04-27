@@ -1,0 +1,46 @@
+# ============================================================================
+# Alert Module Configuration
+# ============================================================================
+# This file can be merged into the main application.yml
+# The settings below are optional and provide sensible defaults
+
+# Logging Configuration
+logging:
+  level:
+    com.pfe.predictive.alert: DEBUG
+    com.pfe.predictive.alert.controller: INFO
+    com.pfe.predictive.alert.service: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# Spring JPA/Hibernate Configuration
+spring:
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQL10Dialect
+        # Use Flyway for migrations, not Hibernate DDL
+        ddl-auto: validate
+    show-sql: false
+    hibernate:
+      fetch-lazy: true
+    # Open session in view (if using web context)
+    open-in-view: false
+
+# Pagination defaults (can be overridden in requests)
+pagination:
+  default-page-size: 20
+  max-page-size: 100
+
+# Alert-specific settings
+alert:
+  # Maximum number of alerts to fetch in bulk operations
+  bulk-operation-limit: 1000
+  # Enable email notifications on critical alerts (future feature)
+  notifications:
+    enabled: false
+    critical-alert-recipients: admin@example.com
+  # Alert aging configuration (for cleanup/archival)
+  aging:
+    days-to-close: 90
+    days-to-archive: 365

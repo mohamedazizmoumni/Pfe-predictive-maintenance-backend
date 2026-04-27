@@ -1,0 +1,17 @@
+com\pfe\predictive\core\entity\RiskLevel.class
+com\pfe\predictive\core\entity\SensorData$SensorDataBuilder.class
+com\pfe\predictive\core\entity\User.class
+com\pfe\predictive\core\entity\Machine.class
+com\pfe\predictive\core\entity\MachineStatus.class
+com\pfe\predictive\core\entity\MaintenancePriority.class
+com\pfe\predictive\core\entity\PredictionRecord$PredictionRecordBuilder.class
+com\pfe\predictive\core\entity\PredictionRecord.class
+com\pfe\predictive\core\entity\Maintenance.class
+com\pfe\predictive\core\entity\UserRole.class
+com\pfe\predictive\core\entity\Permission.class
+com\pfe\predictive\core\entity\Sensor.class
+com\pfe\predictive\core\entity\UserStatus.class
+com\pfe\predictive\core\entity\MaintenanceStatus.class
+com\pfe\predictive\core\entity\MaintenanceType.class
+com\pfe\predictive\core\entity\SensorData.class
+com\pfe\predictive\core\entity\Role.class

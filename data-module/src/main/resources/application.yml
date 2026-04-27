@@ -1,0 +1,21 @@
+# ============================================================================
+# Data Module Configuration
+# ============================================================================
+# Flyway Database Migration & Data Access Configuration
+
+spring:
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQL10Dialect
+        ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+logging:
+  level:
+    com.pfe.predictive.data: DEBUG
+    org.flywaydb: INFO
