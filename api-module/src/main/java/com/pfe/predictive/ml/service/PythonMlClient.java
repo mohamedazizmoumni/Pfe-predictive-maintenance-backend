@@ -64,10 +64,11 @@ public class PythonMlClient {
         return modelInfoResponse;
     }
 
-    public PredictionResponse predict(PredictionRequest request, String correlationId) {
+    public PredictionResponse predict(PredictionRequest request, String correlationId, Long machineId) {
         PredictionResponse response = executeWithRetry("predict", () -> restClient.post()
                 .uri("/predict")
                 .header(properties.getCorrelationHeader(), correlationId)
+                .header("X-Machine-ID", String.valueOf(machineId))
                 .body(request)
                 .retrieve()
                 .onStatus(status -> status.value() == 422, (req, res) -> {

@@ -65,11 +65,20 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<UserDTO> getUserById(@PathVariable Long id) {
-        return userRepository.findById(id)
-                .map(user -> ResponseEntity.ok(toDto(user)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+    @GetMapping("/{idOrUsername}")
+    public ResponseEntity<UserDTO> getUserById(@PathVariable String idOrUsername) {
+        try {
+            // Try to parse as Long (numeric ID)
+            Long id = Long.parseLong(idOrUsername);
+            return userRepository.findById(id)
+                    .map(user -> ResponseEntity.ok(toDto(user)))
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (NumberFormatException e) {
+            // Not a number, try as username
+            return userRepository.findByUsername(idOrUsername)
+                    .map(user -> ResponseEntity.ok(toDto(user)))
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        }
     }
 
     @PostMapping
@@ -109,11 +118,21 @@ public class UserController {
         }
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
+    @PutMapping("/{idOrUsername}")
+    public ResponseEntity<?> updateUser(@PathVariable String idOrUsername, @Valid @RequestBody UpdateUserRequest request) {
         try {
-            User user = userRepository.findById(id)
-                    .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            User user = null;
+            
+            // Try to parse as Long (numeric ID)
+            try {
+                Long id = Long.parseLong(idOrUsername);
+                user = userRepository.findById(id)
+                        .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            } catch (NumberFormatException e) {
+                // Not a number, try as username
+                user = userRepository.findByUsername(idOrUsername)
+                        .orElseThrow(() -> new EntityNotFoundException("User not found: " + idOrUsername));
+            }
 
             if (request.getUsername() != null && !request.getUsername().isBlank()) {
                 if (!request.getUsername().equalsIgnoreCase(user.getUsername())
@@ -187,6 +206,7 @@ public class UserController {
         dto.setMfaEnabled(user.getMfaEnabled());
         dto.setLocked(user.isLocked());
         dto.setCreatedDate(user.getCreatedDate());
+        dto.setProfilePictureUrl(user.getProfilePictureUrl());
         dto.setRoles(user.getRoles() == null
                 ? List.of()
                 : user.getRoles().stream().map(Role::getName).sorted().toList());

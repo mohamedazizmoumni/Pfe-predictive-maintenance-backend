@@ -37,7 +37,12 @@ public class MachineQueryService {
         dto.setModel(machine.getModel());
         dto.setManufacturer(machine.getManufacturer());
         dto.setLocation(machine.getLocation());
+        dto.setCategory(machine.getCategory());
+        dto.setSubCategory(machine.getSubCategory());
         dto.setStatus(machine.getStatus());
+        if (machine.getPhotoPath() != null && !machine.getPhotoPath().isBlank()) {
+            dto.setPhotoUrl("/api/v1/machines/" + machine.getId() + "/photo");
+        }
         dto.setInstallationDate(machine.getInstallationDate());
         dto.setLastMaintenanceDate(machine.getLastMaintenanceDate());
         dto.setNextMaintenanceDate(machine.getNextMaintenanceDate());

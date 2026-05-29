@@ -89,6 +89,12 @@ public class PartService {
         if (request.getDescription() != null) {
             part.setDescription(request.getDescription());
         }
+        if (request.getCategory() != null) {
+            part.setCategory(request.getCategory());
+        }
+        if (request.getSubCategory() != null) {
+            part.setSubCategory(request.getSubCategory());
+        }
         if (request.getCost() != null) {
             part.setCost(request.getCost());
         }
@@ -100,6 +106,30 @@ public class PartService {
         }
         if (request.getSupplier() != null) {
             part.setSupplier(request.getSupplier());
+        }
+        if (request.getPartNumber() != null) {
+            part.setPartNumber(request.getPartNumber());
+        }
+        if (request.getUnit() != null) {
+            part.setUnit(request.getUnit());
+        }
+        if (request.getNotes() != null) {
+            part.setNotes(request.getNotes());
+        }
+        if (request.getCurrentStock() != null) {
+            part.setCurrentStock(request.getCurrentStock());
+            
+            // Update status based on new stock level
+            int currentStock = request.getCurrentStock();
+            int minStock = part.getMinimumStock() != null ? part.getMinimumStock() : 0;
+            
+            if (currentStock <= 0) {
+                part.setStatus(PartStatus.OUT_OF_STOCK);
+            } else if (currentStock <= minStock) {
+                part.setStatus(PartStatus.LOW_STOCK);
+            } else {
+                part.setStatus(PartStatus.AVAILABLE);
+            }
         }
 
         Part updated = partRepository.save(part);
@@ -129,6 +159,22 @@ public class PartService {
     @Transactional(readOnly = true)
     public List<String> getCategories() {
         return partRepository.findDistinctCategories();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PartResponse> getPartsByCategory(String category) {
+        return partRepository.findByCategory(category)
+            .stream()
+            .map(partMapper::toResponse)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PartResponse> getPartsBySubCategory(String subCategory) {
+        return partRepository.findBySubCategory(subCategory)
+            .stream()
+            .map(partMapper::toResponse)
+            .toList();
     }
 
     public void updateStockAfterUsage(Long partId, Integer quantityUsed) {
@@ -164,5 +210,95 @@ public class PartService {
         part.setCurrentStock(part.getCurrentStock() + quantityReceived);
         part.setStatus(PartStatus.AVAILABLE);
         partRepository.save(part);
+    }
+    
+    /**
+     * Upload part image
+     */
+    public PartResponse uploadPartImage(Long partId, org.springframework.web.multipart.MultipartFile image) {
+        log.info("Uploading image for part: {}", partId);
+        
+        Part part = partRepository.findById(partId)
+            .orElseThrow(() -> new IllegalArgumentException("Part not found: " + partId));
+        
+        // Validate file
+        if (image.isEmpty()) {
+            throw new IllegalArgumentException("Image file is empty");
+        }
+        
+        // Validate file type
+        String contentType = image.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("File must be an image");
+        }
+        
+        // Validate file size (max 5MB)
+        long maxSize = 5 * 1024 * 1024; // 5MB
+        if (image.getSize() > maxSize) {
+            throw new IllegalArgumentException("Image size must not exceed 5MB");
+        }
+        
+        try {
+            // Create uploads directory if it doesn't exist
+            java.nio.file.Path uploadDir = java.nio.file.Paths.get("uploads/parts");
+            if (!java.nio.file.Files.exists(uploadDir)) {
+                java.nio.file.Files.createDirectories(uploadDir);
+            }
+            
+            // Generate unique filename
+            String originalFilename = image.getOriginalFilename();
+            String extension = originalFilename != null && originalFilename.contains(".") 
+                ? originalFilename.substring(originalFilename.lastIndexOf("."))
+                : ".jpg";
+            String filename = "part_" + partId + "_" + System.currentTimeMillis() + extension;
+            
+            // Save file
+            java.nio.file.Path filePath = uploadDir.resolve(filename);
+            image.transferTo(filePath.toFile());
+            
+            // Update part with image URL
+            String imageUrl = "/uploads/parts/" + filename;
+            part.setImageUrl(imageUrl);
+            Part saved = partRepository.save(part);
+            
+            log.info("Image uploaded successfully for part {}: {}", partId, imageUrl);
+            return partMapper.toResponse(saved);
+            
+        } catch (java.io.IOException e) {
+            log.error("Failed to upload image for part {}: {}", partId, e.getMessage(), e);
+            throw new IllegalArgumentException("Failed to upload image: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Delete part image
+     */
+    public PartResponse deletePartImage(Long partId) {
+        log.info("Deleting image for part: {}", partId);
+        
+        Part part = partRepository.findById(partId)
+            .orElseThrow(() -> new IllegalArgumentException("Part not found: " + partId));
+        
+        if (part.getImageUrl() != null) {
+            try {
+                // Delete physical file
+                String imageUrl = part.getImageUrl();
+                if (imageUrl.startsWith("/uploads/")) {
+                    java.nio.file.Path filePath = java.nio.file.Paths.get(imageUrl.substring(1));
+                    java.nio.file.Files.deleteIfExists(filePath);
+                }
+            } catch (java.io.IOException e) {
+                log.warn("Failed to delete image file for part {}: {}", partId, e.getMessage());
+            }
+            
+            // Remove image URL from database
+            part.setImageUrl(null);
+            Part saved = partRepository.save(part);
+            
+            log.info("Image deleted successfully for part {}", partId);
+            return partMapper.toResponse(saved);
+        }
+        
+        return partMapper.toResponse(part);
     }
 }

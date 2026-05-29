@@ -3,6 +3,7 @@ package com.pfe.predictive.ml.service;
 import com.pfe.predictive.data.repository.PredictionRecordRepository;
 import com.pfe.predictive.ml.dto.PredictionResponse;
 import com.pfe.predictive.ml.exception.MlBadRequestException;
+import com.pfe.predictive.notification.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +15,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -29,11 +31,19 @@ class MlPredictionServiceTest {
     @Mock
     private PredictionRecordRepository predictionRecordRepository;
 
+    @Mock
+    private NotificationService notificationService;
+
     private MlPredictionService service;
 
     @BeforeEach
     void setUp() {
-        service = new MlPredictionService(pythonMlClient, mlMetadataService, predictionRecordRepository);
+        service = new MlPredictionService(
+                pythonMlClient,
+                mlMetadataService,
+                predictionRecordRepository,
+                notificationService
+        );
     }
 
     @Test
@@ -41,9 +51,9 @@ class MlPredictionServiceTest {
         when(mlMetadataService.expectedFeatureCount(anyString())).thenReturn(89);
         PredictionResponse expected = new PredictionResponse();
         expected.setPrediction(List.of(12.3, 9.8));
-        when(pythonMlClient.predict(any(), anyString())).thenReturn(expected);
+        when(pythonMlClient.predict(any(), anyString(), anyLong())).thenReturn(expected);
 
-        PredictionResponse response = service.predict(List.of(sample(89)), "corr-1", "req-1");
+        PredictionResponse response = service.predict(1L, List.of(sample(89)), "corr-1", "req-1");
 
         assertEquals(2, response.getPrediction().size());
         assertEquals(12.3, response.getPrediction().get(0));
@@ -54,7 +64,7 @@ class MlPredictionServiceTest {
         when(mlMetadataService.expectedFeatureCount(anyString())).thenReturn(89);
 
         MlBadRequestException ex = assertThrows(MlBadRequestException.class,
-                () -> service.predict(List.of(sample(88)), "corr-1", "req-1"));
+            () -> service.predict(1L, List.of(sample(88)), "corr-1", "req-1"));
 
         assertEquals(true, ex.getMessage().contains("exactly 89 features"));
     }
@@ -64,7 +74,7 @@ class MlPredictionServiceTest {
         when(mlMetadataService.expectedFeatureCount(anyString())).thenReturn(89);
 
         MlBadRequestException ex = assertThrows(MlBadRequestException.class,
-                () -> service.predict(List.of(), "corr-1", "req-1"));
+            () -> service.predict(1L, List.of(), "corr-1", "req-1"));
 
         assertEquals(true, ex.getMessage().contains("at least one sample"));
     }
@@ -76,7 +86,7 @@ class MlPredictionServiceTest {
         invalid.set(7, Double.NaN);
 
         MlBadRequestException ex = assertThrows(MlBadRequestException.class,
-                () -> service.predict(List.of(invalid), "corr-1", "req-1"));
+            () -> service.predict(1L, List.of(invalid), "corr-1", "req-1"));
 
         assertEquals(true, ex.getMessage().contains("finite numeric value"));
     }

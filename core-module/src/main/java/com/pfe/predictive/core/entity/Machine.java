@@ -33,8 +33,20 @@ public class Machine {
     @Column(nullable = false, length = 100)
     private String location;
 
+    @Column(length = 100)
+    private String category;
+
+    @Column(length = 100)
+    private String subCategory;
+
     @Column(length = 50)
-    private String status = "ACTIVE";
+    private String status = "OPERATIONAL";
+
+    @Column(length = 500)
+    private String photoPath;
+
+    @Column(length = 100)
+    private String photoContentType;
 
     @Column
     private LocalDateTime installationDate;
@@ -128,12 +140,44 @@ public class Machine {
         this.location = location;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getSubCategory() {
+        return subCategory;
+    }
+
+    public void setSubCategory(String subCategory) {
+        this.subCategory = subCategory;
+    }
+
     public String getStatus() {
         return status;
     }
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getPhotoPath() {
+        return photoPath;
+    }
+
+    public void setPhotoPath(String photoPath) {
+        this.photoPath = photoPath;
+    }
+
+    public String getPhotoContentType() {
+        return photoContentType;
+    }
+
+    public void setPhotoContentType(String photoContentType) {
+        this.photoContentType = photoContentType;
     }
 
     public LocalDateTime getInstallationDate() {

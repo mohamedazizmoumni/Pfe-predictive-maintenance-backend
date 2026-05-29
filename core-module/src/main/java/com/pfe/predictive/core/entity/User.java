@@ -48,6 +48,9 @@ public class User {
     @Column
     private boolean locked = false;
 
+    @Column(columnDefinition = "LONGTEXT")
+    private String profilePictureUrl;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdDate;
@@ -217,5 +220,13 @@ public class User {
             return "";
         }
         return String.join(",", roles.stream().map(Role::getName).toArray(String[]::new));
+    }
+
+    public String getProfilePictureUrl() {
+        return profilePictureUrl;
+    }
+
+    public void setProfilePictureUrl(String profilePictureUrl) {
+        this.profilePictureUrl = profilePictureUrl;
     }
 }

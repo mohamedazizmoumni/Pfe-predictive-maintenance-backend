@@ -1,46 +1,175 @@
 # ============================================================================
-# Alert Module Configuration
+# SERVER CONFIGURATION
 # ============================================================================
-# This file can be merged into the main application.yml
-# The settings below are optional and provide sensible defaults
 
-# Logging Configuration
-logging:
-  level:
-    com.pfe.predictive.alert: DEBUG
-    com.pfe.predictive.alert.controller: INFO
-    com.pfe.predictive.alert.service: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+server:
+  port: 8080
 
-# Spring JPA/Hibernate Configuration
+# ============================================================================
+# SPRING CONFIGURATION
+# ============================================================================
+
 spring:
+
+  # ==========================================================================
+  # DATABASE CONFIGURATION
+  # ==========================================================================
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/predictive_maintenance
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  # ==========================================================================
+  # JPA / HIBERNATE
+  # ==========================================================================
+
   jpa:
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQL10Dialect
-        # Use Flyway for migrations, not Hibernate DDL
-        ddl-auto: validate
-    show-sql: false
-    hibernate:
-      fetch-lazy: true
-    # Open session in view (if using web context)
+    show-sql: true
     open-in-view: false
 
-# Pagination defaults (can be overridden in requests)
+    hibernate:
+      ddl-auto: update
+
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+
+  # ==========================================================================
+  # JACKSON
+  # ==========================================================================
+
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
+
+  # ============================================================================
+  # GMAIL SMTP CONFIGURATION
+  # ============================================================================
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: mohamedaziz.moumni@esprit.tn
+    password: hmux zqbh axin wyuw
+
+    protocol: smtp
+
+    properties:
+      mail:
+        debug: true
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+          ssl:
+            trust: smtp.gmail.com
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+
+logging:
+
+  level:
+
+    root: INFO
+
+    com.pfe.predictive: DEBUG
+
+    # TASK MODULE
+    com.pfe.predictive.task: TRACE
+
+    # EMAIL SERVICE
+    com.pfe.predictive.common.service.EmailService: TRACE
+
+    # ALERT MODULE
+    com.pfe.predictive.alert: DEBUG
+    com.pfe.predictive.alert.controller: DEBUG
+    com.pfe.predictive.alert.service: DEBUG
+
+    # ==========================================================================
+    # SQL LOGGING
+    # ==========================================================================
+
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+    # MAIL
+    org.springframework.mail: DEBUG
+    org.springframework.mail.javamail: DEBUG
+    jakarta.mail: DEBUG
+
+    # ==========================================================================
+    # SECURITY
+    # ==========================================================================
+
+    org.springframework.security: INFO
+
+    # ==========================================================================
+    # WEBSOCKET
+    # ==========================================================================
+
+    org.springframework.web.socket: DEBUG
+    org.springframework.messaging: DEBUG
+    org.springframework.web.socket.messaging: DEBUG
+    org.springframework.web.socket.sockjs: DEBUG
+
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+  file:
+    name: logs/predictive-maintenance.log
+
+# ============================================================================
+# ALERT MODULE CONFIGURATION
+# ============================================================================
+
+alert:
+
+  bulk-operation-limit: 1000
+
+  notifications:
+    enabled: true
+    critical-alert-recipients:
+      - mohamedaziz.moumni@esprit.tn
+
+  aging:
+    days-to-close: 90
+    days-to-archive: 365
+
+# ============================================================================
+# PAGINATION
+# ============================================================================
+
 pagination:
   default-page-size: 20
   max-page-size: 100
 
-# Alert-specific settings
-alert:
-  # Maximum number of alerts to fetch in bulk operations
-  bulk-operation-limit: 1000
-  # Enable email notifications on critical alerts (future feature)
-  notifications:
-    enabled: false
-    critical-alert-recipients: admin@example.com
-  # Alert aging configuration (for cleanup/archival)
-  aging:
-    days-to-close: 90
-    days-to-archive: 365
+# ============================================================================
+# ACTUATOR / MONITORING
+# ============================================================================
+
+management:
+
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+  endpoint:
+    health:
+      show-details: always
+
+# ============================================================================
+# CUSTOM APP CONFIGURATION
+# ============================================================================
+
+app:
+  frontend-url: http://localhost:4200

@@ -51,4 +51,16 @@ public class Machine {
 
     @Column(name = "age", nullable = false)
     private Integer age;
+
+    /**
+     * ARCHITECTURE FIX: Link to operational machine
+     * This connects the financial view to the operational machine entity
+     * 
+     * Note: This is a logical link. In production, you should add a migration:
+     * ALTER TABLE maintenance_cost_machines ADD COLUMN machine_id BIGINT;
+     * ALTER TABLE maintenance_cost_machines ADD CONSTRAINT fk_machine 
+     *   FOREIGN KEY (machine_id) REFERENCES machines(id);
+     */
+    @Column(name = "machine_id")
+    private Long machineId; // FK to core.entity.Machine
 }

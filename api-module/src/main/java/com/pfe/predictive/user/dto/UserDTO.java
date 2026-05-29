@@ -17,6 +17,7 @@ public class UserDTO {
     private boolean locked;
     private List<String> roles;
     private LocalDateTime createdDate;
+    private String profilePictureUrl;
 
     public UserDTO() {}
 
@@ -131,5 +132,13 @@ public class UserDTO {
 
     public void setCreatedDate(LocalDateTime createdDate) {
         this.createdDate = createdDate;
+    }
+
+    public String getProfilePictureUrl() {
+        return profilePictureUrl;
+    }
+
+    public void setProfilePictureUrl(String profilePictureUrl) {
+        this.profilePictureUrl = profilePictureUrl;
     }
 }

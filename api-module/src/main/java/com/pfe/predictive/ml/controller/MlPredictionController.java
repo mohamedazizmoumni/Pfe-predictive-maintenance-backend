@@ -56,8 +56,22 @@ public class MlPredictionController {
                                                       HttpServletRequest servletRequest) {
         String correlationId = resolveCorrelationId(servletRequest);
         String requestId = UUID.randomUUID().toString();
-        PredictionResponse response = mlPredictionService.predict(request.getFeatures(), correlationId, requestId);
+        Long machineId = resolveMachineId(servletRequest);
+        PredictionResponse response = mlPredictionService.predict(machineId, request.getFeatures(), correlationId, requestId);
         return ResponseEntity.ok(response);
+    }
+
+    private Long resolveMachineId(HttpServletRequest request) {
+        String machineIdHeader = request.getHeader("X-Machine-ID");
+        if (machineIdHeader == null || machineIdHeader.isBlank()) {
+            return -1L;
+        }
+
+        try {
+            return Long.parseLong(machineIdHeader);
+        } catch (NumberFormatException ex) {
+            return -1L;
+        }
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {

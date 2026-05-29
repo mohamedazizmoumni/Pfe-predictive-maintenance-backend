@@ -6,16 +6,20 @@ import com.pfe.predictive.ml.exception.MlBadRequestException;
 import com.pfe.predictive.ml.exception.MlDependencyFailureException;
 import com.pfe.predictive.ml.exception.MlRateLimitExceededException;
 import com.pfe.predictive.ml.exception.MlServiceUnavailableException;
-import com.yourpackage.business.exception.ResourceNotFoundException;
+import com.pfe.predictive.nlp.exception.NlpAnalysisNotFoundException;
+import com.pfe.predictive.nlp.exception.NlpClientException;
+import com.pfe.predictive.common.exception.ResourceNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -97,6 +101,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(body);
     }
 
+    @ExceptionHandler(NlpAnalysisNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNlpAnalysisNotFound(
+            NlpAnalysisNotFoundException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> body = baseBody(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    @ExceptionHandler(NlpClientException.class)
+    public ResponseEntity<Map<String, Object>> handleNlpClientException(
+            NlpClientException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> body = baseBody(HttpStatus.BAD_GATEWAY, ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex,
@@ -127,6 +149,29 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
 
         Map<String, Object> body = baseBody(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request) {
+
+        String message = "Invalid data: request violates database constraints";
+        if (ex.getMostSpecificCause() != null && ex.getMostSpecificCause().getMessage() != null) {
+            message = ex.getMostSpecificCause().getMessage();
+        }
+
+        Map<String, Object> body = baseBody(HttpStatus.BAD_REQUEST, message, request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> body = baseBody(HttpStatus.BAD_REQUEST, "Malformed or invalid request payload", request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 

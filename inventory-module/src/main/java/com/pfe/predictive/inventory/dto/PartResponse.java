@@ -18,6 +18,7 @@ public class PartResponse implements Serializable {
     private String description;
     private String partNumber;
     private String category;
+    private String subCategory;
     private BigDecimal cost;
     private Integer currentStock;
     private Integer minimumStock;
@@ -26,6 +27,7 @@ public class PartResponse implements Serializable {
     private String supplier;
     private String status;
     private String notes;
+    private String imageUrl;
     private String createdDate;
     private String lastModifiedDate;
 }

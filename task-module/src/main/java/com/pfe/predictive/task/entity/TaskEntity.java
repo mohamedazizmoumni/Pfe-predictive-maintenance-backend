@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Task {
+public class TaskEntity {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,13 +22,11 @@ public class Task {
     @Column(length = 1000)
     private String description;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TaskStatus status; // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+    @Column(length = 50)
+    private String status = "PENDING"; 
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TaskPriority priority; // LOW, MEDIUM, HIGH, CRITICAL
+    @Column(length = 50)
+    private String priority = "MEDIUM"; 
 
     @Column(name = "machine_id")
     private Long machineId;
@@ -45,28 +43,9 @@ public class Task {
     @Column
     private LocalDateTime completedDate;
 
-    @CreationTimestamp
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdDate;
+    private LocalDateTime createdAt = LocalDateTime.now();
 
-    @UpdateTimestamp
     @Column
-    private LocalDateTime lastModifiedDate;
-
-    @Version
-    private Long version;
-}
-
-public enum TaskStatus {
-    PENDING,
-    IN_PROGRESS,
-    COMPLETED,
-    CANCELLED
-}
-
-public enum TaskPriority {
-    LOW,
-    MEDIUM,
-    HIGH,
-    CRITICAL
+    private LocalDateTime updatedAt;
 }

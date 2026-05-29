@@ -3,259 +3,322 @@ spring:
     name: predictive-maintenance-backend
     version: 1.0.0
 
+  # ============================================================================
+  # DATABASE
+  # ============================================================================
   datasource:
     url: jdbc:postgresql://localhost:5432/pfe
     username: postgres
     password: admin
     driver-class-name: org.postgresql.Driver
+
     hikari:
       maximum-pool-size: 10
       minimum-idle: 5
       connection-timeout: 20000
       idle-timeout: 300000
-      test-on-borrow: true
-      validation-query: "SELECT 1"
-      validation-interval: 30000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+      auto-commit: true
+      pool-name: PredictiveHikariPool
 
+  # ============================================================================
+  # JPA / HIBERNATE
+  # ============================================================================
   jpa:
     database: POSTGRESQL
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
     hibernate:
       ddl-auto: validate
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        jdbc:
-          fetch-size: 50
-          batch-size: 10
-          use-scrollable-result-set: false
-        order-inserts: true
-        order-updates: true
-        use_versioned-lob: true
-        batch-versioned-data: true
+
     show-sql: false
     open-in-view: false
 
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  # ============================================================================
+  # FLYWAY
+  # ============================================================================
   flyway:
     enabled: true
     locations: classpath:db/migration
-    clean-disabled: false
-    clean-on-validation-error: true
-    baseline-on-migrate: false
-    placeholders:
-      schema: public
+    baseline-on-migrate: true
     out-of-order: true
 
+  # ============================================================================
+  # FILE UPLOAD
+  # ============================================================================
   servlet:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
 
+  # ============================================================================
+  # JACKSON
+  # ============================================================================
   jackson:
     default-property-inclusion: non_null
+
     serialization:
-      indent-output: false
       write-dates-as-timestamps: false
+      indent-output: true
+
     deserialization:
       fail-on-unknown-properties: false
 
+  # ============================================================================
+  # GMAIL SMTP CONFIGURATION
+  # ============================================================================
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: mohamedaziz.moumni@esprit.tn
+    password: hmux zqbh axin wyuw
 
+    protocol: smtp
+
+    properties:
+      mail:
+        debug: true
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+          ssl:
+            trust: smtp.gmail.com
+
+app:
+  frontend-url: http://localhost:4200
+
+  mail:
+    enabled: true
+    from: mohamedaziz.moumni@esprit.tn
+
+    task:
+      enabled: true
+
+    alert:
+      enabled: true
+
+# ============================================================================
+# LOGGING
+# ============================================================================
 logging:
   level:
     root: INFO
+
+    # Application logs
     com.pfe.predictive: DEBUG
-    com.pfe.predictive.api: INFO
-    com.pfe.predictive.core: DEBUG
-    com.pfe.predictive.data: DEBUG
-    com.pfe.predictive.security: DEBUG
+
+    # Email logs
+    org.springframework.mail: DEBUG
+    org.springframework.mail.javamail: DEBUG
+    jakarta.mail: DEBUG
+    javax.mail: DEBUG
+
+    # SQL logs
     org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-    org.flywaydb: INFO
-    org.springframework.data: DEBUG
+
+    # Security logs
+    org.springframework.security: DEBUG
+
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [corr:%X{correlationId:-} req:%X{requestId:-}] - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [corr:%X{correlationId:-} req:%X{requestId:-}] - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
   file:
     name: logs/application.log
-    max-size: 10MB
-    max-history: 10
 
 # ============================================================================
-# SERVER CONFIGURATION
+# SERVER
 # ============================================================================
 server:
   port: 8080
+
   servlet:
     context-path: /
+
   error:
     include-message: always
     include-binding-errors: always
     include-stacktrace: on_param
-    include-exception: false
+
   compression:
-    enabled: true
-    mime-types: application/json,application/xml,text/html,text/xml,text/plain
-  http2:
     enabled: true
 
 # ============================================================================
-# ACTUATOR / HEALTH CHECK CONFIGURATION
+# MANAGEMENT
 # ============================================================================
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
+
   endpoint:
     health:
-      show-details: when-authorized
-      group:
-        readiness:
-          include: readinessState,db,diskSpace,pythonMl
-  health:
-    db:
-      enabled: true
-    diskspace:
-      enabled: true
-    livenessState:
-      enabled: true
-    readinessState:
-      enabled: true
+      show-details: always
 
 # ============================================================================
-# PAGINATION & API DEFAULTS
-# ============================================================================
-pagination:
-  default-page-size: 20
-  max-page-size: 100
-
-# ============================================================================
-# SECURITY (JWT) CONFIGURATION - UPDATED
+# JWT
 # ============================================================================
 jwt:
-  # Access token: 1 hour (3600000 ms)
   secret: your-super-secret-jwt-key-change-this-in-production-at-least-256-bits-long-minimum-32-characters
+
   expiration: 3600000
-  # Refresh token: 7 days (604800000 ms)
+
   refresh:
     expiration: 604800000
 
+# ============================================================================
+# SECURITY
+# ============================================================================
 security:
-  # Keep backward compatibility
   jwt:
     secret: your-super-secret-jwt-key-change-this-in-production-at-least-256-bits-long-minimum-32-characters
+
     expiration: 3600000
+
     refresh-expiration: 604800000
 
 # ============================================================================
-# CORS CONFIGURATION (IMPORTANT FOR ANGULAR)
+# CORS
 # ============================================================================
 cors:
-  allowed-origins: http://localhost:4200,http://localhost:3000,http://127.0.0.1:4200
-  allowed-methods: GET,POST,PUT,DELETE,OPTIONS,PATCH
-  allowed-headers: Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers
-  exposed-headers: Authorization,Content-Type
+  allowed-origins:
+    - http://localhost:4200
+    - http://127.0.0.1:4200
+    - http://localhost:3000
+
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+    - PATCH
+
+  allowed-headers:
+    - Authorization
+    - Content-Type
+    - Accept
+    - Origin
+
+  exposed-headers:
+    - Authorization
+    - Content-Type
+
   allow-credentials: true
-  max-age: 3600
 
 # ============================================================================
-# SPECIFIC MODULE CONFIGURATIONS
+# ALERT SETTINGS
 # ============================================================================
-
-# Alert Module Settings
 alert:
   bulk-operation-limit: 1000
+
   notifications:
-    enabled: false
-    critical-alert-recipients: admin@example.com
+    enabled: true
+
+    critical-alert-recipients:
+      - mohamedaziz.moumni@gmail.com
+
   aging:
     days-to-close: 90
     days-to-archive: 365
 
-# Machine Module Settings
+# ============================================================================
+# MACHINE SETTINGS
+# ============================================================================
 machine:
   sensor-data-retention-days: 365
   anomaly-detection-threshold: 0.8
 
-# Maintenance Module Settings
+# ============================================================================
+# MAINTENANCE SETTINGS
+# ============================================================================
 maintenance:
   days-overdue-threshold: 7
   auto-escalation-enabled: false
 
-# Prediction Module Settings
+# ============================================================================
+# PREDICTION SETTINGS
+# ============================================================================
 prediction:
   min-confidence-threshold: 0.5
   model-evaluation-enabled: true
 
-predictive:
-  maintenance:
-    schedule-ms: ${PREDICTIVE_MAINTENANCE_SCHEDULE_MS:5000}
-    failure-threshold: ${PREDICTIVE_FAILURE_THRESHOLD:0.7}
-    report-cooldown-minutes: ${PREDICTIVE_REPORT_COOLDOWN_MINUTES:60}
+# ============================================================================
+# NLP SERVICE
+# ============================================================================
+nlp:
+  service:
+    url: http://localhost:8000
+    connect-timeout-ms: 5000
+    read-timeout-ms: 15000
 
-# Inventory Module Settings
+# ============================================================================
+# TELEMETRY
+# ============================================================================
+telemetry:
+  replay:
+    enabled: true
+    tick-interval-ms: 2000
+    default-speed: 1.0
+
+# ============================================================================
+# INVENTORY
+# ============================================================================
 inventory:
   low-stock-threshold-percentage: 20
   reorder-lead-time-days: 5
 
 # ============================================================================
-# CHATBOT / OPENAI CONFIGURATION
+# OPENAI
 # ============================================================================
 openai:
   api:
-    # Do not hardcode secrets. Set OPENAI_API_KEY in your environment.
     key: ${OPENAI_API_KEY:}
     url: https://api.openai.com/v1/chat/completions
+
   model: gpt-4o-mini
 
+# ============================================================================
+# CHATBOT
+# ============================================================================
 chatbot:
   timeout-seconds: 30
+
   ollama:
     enabled: true
     api-url: http://127.0.0.1:11434/api/chat
     model: tinyllama
 
 # ============================================================================
-# PYTHON ML SERVICE INTEGRATION
+# ML SERVICES
 # ============================================================================
 ml:
-  # Internal API key for securing calls to FastAPI microservices
-  internal-api-key: ${ML_INTERNAL_API_KEY:sentinel-dev-secret}
-  
-  # Predictive maintenance service (port 5000)
+  internal-api-key: sentinel-dev-secret
+
   predictive:
-    url: ${ML_PREDICTIVE_URL:http://localhost:5000}
-  
-  # Face recognition service (port 5001)
+    url: http://localhost:5000
+
   face:
-    url: ${ML_FACE_URL:http://localhost:5001}
-  
-  service:
-    base-url: ${ML_SERVICE_BASE_URL:http://127.0.0.1:8000}
-    expected-feature-count: 89
-    correlation-header: X-Correlation-ID
-    timeout:
-      connect: ${ML_SERVICE_CONNECT_TIMEOUT:2s}
-      read: ${ML_SERVICE_READ_TIMEOUT:5s}
-    retry:
-      max-attempts: ${ML_SERVICE_RETRY_MAX_ATTEMPTS:3}
-      backoff: ${ML_SERVICE_RETRY_BACKOFF:200ms}
-    auth:
-      header-name: ${ML_SERVICE_AUTH_HEADER_NAME:}
-      header-value: ${ML_SERVICE_AUTH_HEADER_VALUE:}
-  rate-limit:
-    enabled: ${ML_RATE_LIMIT_ENABLED:true}
-    requests-per-minute: ${ML_RATE_LIMIT_RPM:60}
+    url: http://localhost:5001
 
 # ============================================================================
-# FACE LOGIN SERVICE INTEGRATION
+# FACE LOGIN
 # ============================================================================
 face-login:
   service:
-    base-url: ${FACE_LOGIN_SERVICE_BASE_URL:http://localhost:5001}
-    recognize-path: ${FACE_LOGIN_RECOGNIZE_PATH:/recognize}
-    enroll-path: ${FACE_LOGIN_ENROLL_PATH:/enroll}
-    image-field-name: ${FACE_LOGIN_IMAGE_FIELD_NAME:image}
-    timeout:
-      connect: ${FACE_LOGIN_CONNECT_TIMEOUT:2s}
-      read: ${FACE_LOGIN_READ_TIMEOUT:8s}
+    base-url: http://localhost:5001

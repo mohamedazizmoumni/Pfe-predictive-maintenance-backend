@@ -8,13 +8,19 @@ import com.pfe.predictive.alert.entity.Alert;
 import com.pfe.predictive.alert.entity.AlertStatus;
 import com.pfe.predictive.alert.mapper.AlertMapper;
 import com.pfe.predictive.alert.repository.AlertRepository;
+import com.pfe.predictive.alert.service.AlertNotificationProperties;
+import com.pfe.predictive.common.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * AlertService - Business logic for alert write operations.
@@ -55,6 +61,9 @@ public class AlertService {
 
     private final AlertRepository alertRepository;
     private final AlertMapper alertMapper;
+    private final EmailService emailService;
+    private final AlertNotificationProperties alertNotificationProperties;
+    private final SimpMessagingTemplate messagingTemplate;
 
     // ============================================================================
     // CREATE OPERATIONS
@@ -74,7 +83,39 @@ public class AlertService {
         Alert saved = alertRepository.save(alert);
 
         log.info("Alert created successfully with ID: {}", saved.getId());
+
+        publishRealtimeAlert(saved);
+
+        // Send notification emails to managers only.
+        if (alertNotificationProperties.isEnabled()) {
+            emailService.notifyManagersOfMachineAlert(
+                    saved.getMachineId(),
+                    saved.getSeverity() == null ? "UNKNOWN" : saved.getSeverity().name(),
+                    saved.getMessage(),
+                    saved.getCreatedDate(),
+                    saved.getRecommendations()
+            );
+            log.info("Alert email dispatch queued for alert {}", saved.getId());
+        }
         return saved;
+    }
+
+    private void publishRealtimeAlert(Alert alert) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("alertId", alert.getId());
+            payload.put("machineId", alert.getMachineId());
+            payload.put("title", alert.getTitle());
+            payload.put("description", alert.getMessage());
+            payload.put("severity", alert.getSeverity() == null ? "UNKNOWN" : alert.getSeverity().name());
+            payload.put("status", alert.getStatus() == null ? "UNKNOWN" : alert.getStatus().name());
+            payload.put("timestamp", alert.getCreatedDate() == null ? LocalDateTime.now() : alert.getCreatedDate());
+            payload.put("recommendedAction", alert.getRecommendations());
+
+            messagingTemplate.convertAndSend("/topic/alerts", payload);
+        } catch (Exception ex) {
+            log.error("Failed to publish realtime alert {}: {}", alert.getId(), ex.getMessage(), ex);
+        }
     }
 
     // ============================================================================
@@ -240,4 +281,5 @@ public class AlertService {
         return alertRepository.findById(alertId)
             .orElseThrow(() -> new EntityNotFoundException("Alert not found with ID: " + alertId));
     }
+
 }

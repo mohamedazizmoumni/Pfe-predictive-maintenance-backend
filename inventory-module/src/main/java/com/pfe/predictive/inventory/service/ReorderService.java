@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -30,25 +31,35 @@ public class ReorderService {
         log.info("Creating reorder request for part: {}", request.getPartId());
 
         Part part = partRepository.findById(request.getPartId())
-            .orElseThrow(() -> new IllegalArgumentException("Part not found"));
+            .orElseThrow(() -> new IllegalArgumentException("Part not found: " + request.getPartId()));
 
         ReorderRequest reorder = reorderMapper.toEntity(request, part, requestedBy);
         ReorderRequest saved = reorderRepository.save(reorder);
         return reorderMapper.toResponse(saved);
     }
 
+    @Transactional(readOnly = true)
+    public List<ReorderRequestResponse> getAllReorders() {
+        return reorderRepository.findAll()
+            .stream()
+            .map(reorderMapper::toResponse)
+            .toList();
+    }
+
     public ReorderRequestResponse approveReorder(Long id, ReorderApprovalRequest request, String approvedBy) {
         log.info("Processing reorder approval: {} - Approved: {}", id, request.getApproved());
 
         ReorderRequest reorder = reorderRepository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Reorder not found"));
+            .orElseThrow(() -> new IllegalArgumentException("Reorder not found: " + id));
 
         if (Boolean.TRUE.equals(request.getApproved())) {
             reorder.setStatus(ReorderStatus.APPROVED);
             reorder.setApprovedBy(approvedBy);
+            reorder.setApprovedDate(LocalDateTime.now());
         } else {
             reorder.setStatus(ReorderStatus.REJECTED);
             reorder.setApprovedBy(null);
+            reorder.setApprovedDate(null);
         }
 
         ReorderRequest updated = reorderRepository.save(reorder);
@@ -66,7 +77,7 @@ public class ReorderService {
     @Transactional(readOnly = true)
     public ReorderRequestResponse getReorderById(Long id) {
         ReorderRequest reorder = reorderRepository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Reorder not found"));
+            .orElseThrow(() -> new IllegalArgumentException("Reorder not found: " + id));
         return reorderMapper.toResponse(reorder);
     }
 }

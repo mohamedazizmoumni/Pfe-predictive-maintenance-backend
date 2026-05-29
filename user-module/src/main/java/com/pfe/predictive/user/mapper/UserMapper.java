@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
 
 /**
  * UserMapper - Entity ↔ DTO conversions for User
@@ -110,6 +111,32 @@ public class UserMapper {
             .user(toResponse(user))
             .expiresIn(expiresIn)
             .refreshExpiresIn(refreshExpiresIn)
+            .build();
+    }
+
+    public ProfileResponse toProfileResponse(User user) {
+        if (user == null) return null;
+
+        List<String> roles = user.getRolesList() != null
+            ? Arrays.asList(user.getRolesList().split(","))
+            : new ArrayList<>();
+
+        return ProfileResponse.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .firstName(user.getFirstName())
+            .lastName(user.getLastName())
+            .displayName(user.getDisplayName())
+            .phoneNumber(user.getPhoneNumber())
+            .department(user.getDepartment())
+            .status(user.getStatus())
+            .mfaEnabled(user.getMfaEnabled())
+            .profilePictureUrl(user.getProfilePictureUrl())
+            .roles(roles)
+            .lastLoginDate(user.getLastLoginDate())
+            .createdDate(user.getCreatedDate())
+            .lastModifiedDate(user.getLastModifiedDate())
             .build();
     }
 }

@@ -14,48 +14,58 @@ import java.math.RoundingMode;
 public class ReorderMapper {
 
     public ReorderRequestResponse toResponse(ReorderRequest reorder) {
+
         if (reorder == null) {
             return null;
         }
 
+        Part part = reorder.getPart();
+
         return ReorderRequestResponse.builder()
-            .id(reorder.getId())
-            .partId(reorder.getPart().getId())
-            .partName(reorder.getPart().getName())
-            .quantity(reorder.getQuantity())
-            .approximateCost(calculateTotalCost(reorder))
-            .reason(reorder.getReason())
-            .status(reorder.getStatus().toString())
-            .requestedBy(reorder.getRequestedBy())
-            .requestedDate(reorder.getCreatedDate() != null ? reorder.getCreatedDate().toString() : null)
-            .approvedBy(reorder.getApprovedBy())
-            .approvedDate(reorder.getApprovedDate() != null ? reorder.getApprovedDate().toString() : null)
-            .notes(reorder.getNotes())
-            .build();
+                .id(reorder.getId())
+                .partId(part != null ? part.getId() : null)
+                .partName(part != null ? part.getName() : null)
+                .quantity(reorder.getQuantity())
+                .approximateCost(calculateTotalCost(reorder))
+                .reason(reorder.getReason())
+                .status(reorder.getStatus() != null ? reorder.getStatus().toString() : null)
+                .requestedBy(reorder.getRequestedBy())
+                .requestedDate(reorder.getCreatedDate() != null ? reorder.getCreatedDate().toString() : null)
+                .approvedBy(reorder.getApprovedBy())
+                .approvedDate(reorder.getApprovedDate() != null ? reorder.getApprovedDate().toString() : null)
+                .notes(reorder.getNotes())
+                .build();
     }
 
-    public ReorderRequest toEntity(ReorderRequestRequest request, Part part, String requestedBy) {
+    public ReorderRequest toEntity(
+            ReorderRequestRequest request,
+            Part part,
+            String requestedBy
+    ) {
         if (request == null || part == null) {
-            return null;
+            throw new IllegalArgumentException("Request or part cannot be null");
         }
 
         return ReorderRequest.builder()
-            .part(part)
-            .quantity(request.getQuantity())
-            .reason(request.getReason())
-            .requestedBy(requestedBy)
-            .notes(request.getNotes())
-            .status(ReorderStatus.REQUESTED)
-            .build();
+                .part(part)
+                .quantity(request.getQuantity() != null ? request.getQuantity() : 1)
+                .reason(request.getReason())
+                .requestedBy(requestedBy)
+                .notes(request.getNotes())
+                .status(ReorderStatus.REQUESTED)
+                .build();
     }
 
     private BigDecimal calculateTotalCost(ReorderRequest reorder) {
-        if (reorder.getPart().getCost() == null) {
-            return null;
+        if (reorder == null ||
+            reorder.getPart() == null ||
+            reorder.getQuantity() == null ||
+            reorder.getPart().getCost() == null) {
+            return BigDecimal.ZERO;
         }
 
-        BigDecimal unitCost = reorder.getPart().getCost();
-        BigDecimal total = unitCost.multiply(BigDecimal.valueOf(reorder.getQuantity()));
-        return total.setScale(2, RoundingMode.HALF_UP);
+        return reorder.getPart().getCost()
+                .multiply(BigDecimal.valueOf(reorder.getQuantity()))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 }

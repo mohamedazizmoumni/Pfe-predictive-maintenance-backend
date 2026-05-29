@@ -94,6 +94,19 @@ public class SecurityConfig {
                 .requestMatchers("/error").permitAll()
 
                 .requestMatchers("/health", "/actuator/**").permitAll()
+                
+                // WebSocket endpoints - allow for handshake
+                .requestMatchers("/ws-machine/**").permitAll()
+                .requestMatchers("/ws-nlp/**").permitAll()
+                .requestMatchers("/topic/**").permitAll()
+                .requestMatchers("/app/**").permitAll()
+                .requestMatchers("/api/v1/streaming/**").permitAll()
+
+                .requestMatchers("/api/nlp/**")
+                    .hasAnyAuthority("ROLE_TECHNICIAN", "ROLE_MANAGER", "ROLE_DATA_SCIENTIST", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+
+                .requestMatchers("/api/v1/nlp/**")
+                    .hasAnyAuthority("ROLE_TECHNICIAN", "ROLE_MANAGER", "ROLE_DATA_SCIENTIST", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
 
                 .requestMatchers("/api/v1/maintenance/**")
                     .hasAnyAuthority("ROLE_TECHNICIAN", "ROLE_MANAGER", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")

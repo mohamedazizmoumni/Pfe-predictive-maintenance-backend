@@ -27,7 +27,6 @@
             <artifactId>core-module</artifactId>
             <version>1.0.0</version>
         </dependency>
-
         <!-- Common Module -->
         <dependency>
             <groupId>com.pfe.predictive</groupId>
@@ -53,6 +52,13 @@
         <dependency>
             <groupId>com.pfe.predictive</groupId>
             <artifactId>inventory-module</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- NLP Module -->
+        <dependency>
+            <groupId>com.pfe.predictive</groupId>
+            <artifactId>nlp-module</artifactId>
             <version>1.0.0</version>
         </dependency>
 
@@ -104,12 +110,11 @@
         </dependency> -->
 
         <!-- Task Module -->
-        <!-- TEMPORARILY EXCLUDED DUE TO PRE-EXISTING COMPILATION ERRORS -->
-        <!-- <dependency>
+        <dependency>
             <groupId>com.pfe.predictive</groupId>
             <artifactId>task-module</artifactId>
             <version>1.0.0</version>
-        </dependency> -->
+        </dependency>
 
         <!-- ============= SPRING BOOT STARTERS ============= -->
         
@@ -135,6 +140,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Spring Boot WebSocket -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
         <!-- ============= DATABASE ============= -->

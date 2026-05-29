@@ -6,6 +6,7 @@ import com.pfe.predictive.data.repository.PredictionRecordRepository;
 import com.pfe.predictive.ml.dto.PredictionRequest;
 import com.pfe.predictive.ml.dto.PredictionResponse;
 import com.pfe.predictive.ml.exception.MlBadRequestException;
+import com.pfe.predictive.notification.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,27 +23,31 @@ public class MlPredictionService {
     private final PythonMlClient pythonMlClient;
     private final MlMetadataService mlMetadataService;
     private final PredictionRecordRepository predictionRecordRepository;
+    private final NotificationService notificationService;
 
     public MlPredictionService(PythonMlClient pythonMlClient,
                               MlMetadataService mlMetadataService,
-                              PredictionRecordRepository predictionRecordRepository) {
+                              PredictionRecordRepository predictionRecordRepository,
+                              NotificationService notificationService) {
         this.pythonMlClient = pythonMlClient;
         this.mlMetadataService = mlMetadataService;
         this.predictionRecordRepository = predictionRecordRepository;
+        this.notificationService = notificationService;
     }
 
-    public PredictionResponse predict(List<List<Double>> features, String correlationId, String requestId) {
+    public PredictionResponse predict(Long machineId, List<List<Double>> features, String correlationId, String requestId) {
         long startNanos = System.nanoTime();
         int expectedFeatureCount = mlMetadataService.expectedFeatureCount(correlationId);
         validateFeatures(features, expectedFeatureCount);
 
-        PredictionResponse response = pythonMlClient.predict(new PredictionRequest(features), correlationId);
+        PredictionResponse response = pythonMlClient.predict(new PredictionRequest(features), correlationId, machineId);
         long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
         int responseSize = response.getPrediction() != null ? response.getPrediction().size() : 0;
 
-        log.info("event=ml_prediction requestId={} correlationId={} expectedFeatureCount={} sampleCount={} latencyMs={} status=success responseSize={}",
+        log.info("event=ml_prediction requestId={} correlationId={} machineId={} expectedFeatureCount={} sampleCount={} latencyMs={} status=success responseSize={}",
                 requestId,
                 correlationId,
+                machineId,
                 expectedFeatureCount,
                 features.size(),
                 latencyMs,
@@ -79,7 +84,7 @@ public class MlPredictionService {
             String inputFeaturesSummary) {
 
         // Get prediction from ML service
-        PredictionResponse mlResponse = predict(features, correlationId, requestId);
+        PredictionResponse mlResponse = predict(machineId, features, correlationId, requestId);
 
         // Extract RUL value (first value in prediction array)
         Double rulValue = (mlResponse.getPrediction() != null && !mlResponse.getPrediction().isEmpty())
@@ -113,6 +118,9 @@ public class MlPredictionService {
                 riskLevel,
                 modelVersion,
                 triggeredBy);
+
+        // Trigger notifications for HIGH and CRITICAL risks
+        notificationService.notifyIfRequired(machineId, rulValue, riskLevel, savedRecord.getId());
 
         return new PredictionRecordWithResponse(mlResponse, savedRecord);
     }
