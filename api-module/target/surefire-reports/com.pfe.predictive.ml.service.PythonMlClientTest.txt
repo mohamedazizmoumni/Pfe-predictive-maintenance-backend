@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.pfe.predictive.ml.service.PythonMlClientTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.591 s -- in com.pfe.predictive.ml.service.PythonMlClientTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.245 s -- in com.pfe.predictive.ml.service.PythonMlClientTest

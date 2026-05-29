@@ -1,7 +1,14 @@
-com\pfe\predictive\data\repository\SensorRepository.class
+com\pfe\predictive\data\repository\SensorTelemetryRepository.class
+com\pfe\predictive\data\repository\SensorDataRepository.class
+com\pfe\predictive\data\repository\PredictionHistoryRepository.class
+com\pfe\predictive\data\repository\MachineSimulationStateRepository.class
 com\pfe\predictive\data\repository\PredictionRecordRepository.class
 com\pfe\predictive\data\repository\RoleRepository.class
+com\pfe\predictive\data\repository\MachineEventRepository.class
+com\pfe\predictive\data\repository\TaskRepository.class
+com\pfe\predictive\data\repository\MaintenanceRepository.class
 com\pfe\predictive\data\repository\UserRepository.class
 com\pfe\predictive\data\repository\MachineRepository.class
-com\pfe\predictive\data\repository\SensorDataRepository.class
-com\pfe\predictive\data\repository\MaintenanceRepository.class
+com\pfe\predictive\data\repository\SensorRepository.class
+com\pfe\predictive\data\repository\finance\ExpenseReportRepository.class
+com\pfe\predictive\data\repository\finance\AnnualBudgetRepository.class

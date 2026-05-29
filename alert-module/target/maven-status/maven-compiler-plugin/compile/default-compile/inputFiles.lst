@@ -1,5 +1,6 @@
 C:\Users\maziz\OneDrive\Desktop\Stage-Pfe\code\Pfe-predictive-maintenance-backend\alert-module\src\main\java\com\pfe\predictive\alert\repository\AlertRepository.java
 C:\Users\maziz\OneDrive\Desktop\Stage-Pfe\code\Pfe-predictive-maintenance-backend\alert-module\src\main\java\com\pfe\predictive\alert\dto\AlertDto.java
+C:\Users\maziz\OneDrive\Desktop\Stage-Pfe\code\Pfe-predictive-maintenance-backend\alert-module\src\main\java\com\pfe\predictive\alert\service\AlertNotificationProperties.java
 C:\Users\maziz\OneDrive\Desktop\Stage-Pfe\code\Pfe-predictive-maintenance-backend\alert-module\src\main\java\com\pfe\predictive\alert\dto\AlertResponse.java
 C:\Users\maziz\OneDrive\Desktop\Stage-Pfe\code\Pfe-predictive-maintenance-backend\alert-module\src\main\java\com\pfe\predictive\alert\dto\CloseAlertRequest.java
 C:\Users\maziz\OneDrive\Desktop\Stage-Pfe\code\Pfe-predictive-maintenance-backend\alert-module\src\main\java\com\pfe\predictive\alert\dto\CreateAlertRequest.java

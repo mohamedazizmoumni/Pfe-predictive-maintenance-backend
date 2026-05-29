@@ -25,12 +25,18 @@
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
 
+        <!-- Data access for shared helpers that need user lookup -->
+        <dependency>
+            <groupId>com.pfe.predictive</groupId>
+            <artifactId>data-module</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- Spring Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

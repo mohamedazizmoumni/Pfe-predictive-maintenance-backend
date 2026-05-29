@@ -43,6 +43,9 @@ public class Part {
     @Column(length = 100)
     private String category;
 
+    @Column(length = 100)
+    private String subCategory;
+
     @Column(precision = 19, scale = 4)
     private BigDecimal cost;
 
@@ -67,6 +70,9 @@ public class Part {
 
     @Column(length = 1000)
     private String notes;
+
+    @Column(length = 500)
+    private String imageUrl;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

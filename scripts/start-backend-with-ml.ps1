@@ -20,7 +20,7 @@ Write-Host "Starting Spring Boot backend..."
 Push-Location $repoRoot
 try {
     $env:ML_SERVICE_BASE_URL = "http://127.0.0.1:$MlPort"
-    mvn -pl api-module spring-boot:run
+    mvn -f "$repoRoot\pom.xml" -pl api-module -am spring-boot:run
 } finally {
     Pop-Location
 }

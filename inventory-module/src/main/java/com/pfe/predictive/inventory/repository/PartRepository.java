@@ -13,6 +13,8 @@ public interface PartRepository extends JpaRepository<Part, Long> {
 
     List<Part> findByCategory(String category);
 
+    List<Part> findBySubCategory(String subCategory);
+
     List<Part> findBySupplier(String supplier);
 
     List<Part> findByStatus(PartStatus status);

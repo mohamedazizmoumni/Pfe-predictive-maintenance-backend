@@ -11,9 +11,9 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>sensor-module</artifactId>
-    <name>Sensor Module</name>
-    <description>Sensor management and sensor data collection</description>
+    <artifactId>task-module</artifactId>
+    <name>Task Module</name>
+    <description>Task management for maintenance operations</description>
 
     <dependencies>
         <dependency>
@@ -24,11 +24,6 @@
         <dependency>
             <groupId>com.pfe.predictive</groupId>
             <artifactId>data-module</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.pfe.predictive</groupId>
-            <artifactId>machine-module</artifactId>
             <version>1.0.0</version>
         </dependency>
         <dependency>
@@ -45,5 +40,23 @@
             <optional>true</optional>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Disable Spring Boot repackage for library modules -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

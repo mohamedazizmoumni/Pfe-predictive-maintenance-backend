@@ -82,7 +82,7 @@ class PythonMlClientTest {
         });
 
         PythonMlClient client = createClient(defaultProperties(server.getAddress().getPort()));
-        PredictionResponse prediction = client.predict(new PredictionRequest(List.of(sample(89), sample(89))), "corr-1");
+        PredictionResponse prediction = client.predict(new PredictionRequest(List.of(sample(89), sample(89))), "corr-1", 1L);
 
         assertEquals(2, prediction.getPrediction().size());
         ObjectMapper mapper = new ObjectMapper();
@@ -119,7 +119,7 @@ class PythonMlClientTest {
         PythonMlClient client = createClient(properties);
 
         assertThrows(MlServiceUnavailableException.class,
-                () -> client.predict(new PredictionRequest(List.of(sample(89))), "corr-1"));
+            () -> client.predict(new PredictionRequest(List.of(sample(89))), "corr-1", 1L));
     }
 
     @Test

@@ -26,6 +26,7 @@ com\pfe\predictive\alert\service\AlertQueryService$AlertStatusStats$AlertStatusS
 com\pfe\predictive\alert\dto\AlertSearchCriteria$AlertSearchCriteriaBuilder.class
 com\pfe\predictive\alert\mapper\AlertMapper.class
 com\pfe\predictive\alert\service\AlertService.class
+com\pfe\predictive\alert\service\AlertNotificationProperties.class
 com\pfe\predictive\alert\dto\CreateAlertRequest.class
 com\pfe\predictive\alert\entity\Alert$AlertBuilder.class
 com\pfe\predictive\alert\controller\AlertController.class

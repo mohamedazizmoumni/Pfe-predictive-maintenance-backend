@@ -10,7 +10,10 @@ public class MachineDTO {
     private String model;
     private String manufacturer;
     private String location;
+    private String category;
+    private String subCategory;
     private String status;
+    private String photoUrl;
     private LocalDateTime installationDate;
     private LocalDateTime lastMaintenanceDate;
     private LocalDateTime nextMaintenanceDate;
@@ -85,12 +88,36 @@ public class MachineDTO {
         this.location = location;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getSubCategory() {
+        return subCategory;
+    }
+
+    public void setSubCategory(String subCategory) {
+        this.subCategory = subCategory;
+    }
+
     public String getStatus() {
         return status;
     }
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getPhotoUrl() {
+        return photoUrl;
+    }
+
+    public void setPhotoUrl(String photoUrl) {
+        this.photoUrl = photoUrl;
     }
 
     public LocalDateTime getInstallationDate() {

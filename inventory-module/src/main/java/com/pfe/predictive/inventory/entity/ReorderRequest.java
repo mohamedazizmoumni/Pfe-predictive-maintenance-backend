@@ -17,7 +17,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -33,7 +32,7 @@ public class ReorderRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "part_id", nullable = false)
     private Part part;
 
@@ -60,7 +59,8 @@ public class ReorderRequest {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdDate;
 
-    @UpdateTimestamp
+    // Plain column — set explicitly in ReorderService.approveReorder()
+    // Removed @UpdateTimestamp which was overwriting this on every save
     @Column
     private LocalDateTime approvedDate;
 

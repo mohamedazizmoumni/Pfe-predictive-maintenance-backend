@@ -7,5 +7,5 @@ public enum MachineStatus {
     OPERATIONAL,
     MAINTENANCE,
     FAULTY,
-    DECOMMISSIONED
+    INACTIVE
 }

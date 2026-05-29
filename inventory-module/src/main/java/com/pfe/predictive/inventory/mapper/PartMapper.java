@@ -28,6 +28,7 @@ public class PartMapper {
             .supplier(part.getSupplier())
             .status(part.getStatus() != null ? part.getStatus().toString() : PartStatus.AVAILABLE.toString())
             .notes(part.getNotes())
+            .imageUrl(part.getImageUrl())
             .createdDate(part.getCreatedDate() != null ? part.getCreatedDate().toString() : null)
             .lastModifiedDate(part.getLastModifiedDate() != null ? part.getLastModifiedDate().toString() : null)
             .build();
@@ -49,6 +50,7 @@ public class PartMapper {
             .minimumStock(request.getMinimumStock())
             .reorderQuantity(request.getReorderQuantity())
             .notes(request.getNotes())
+            .imageUrl(request.getImageUrl())
             // `currentStock` and `status` are set in the service layer so business rules are centralized
             .currentStock(request.getCurrentStock() != null ? request.getCurrentStock() : 0)
             .build();

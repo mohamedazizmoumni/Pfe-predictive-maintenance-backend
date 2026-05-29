@@ -5,13 +5,16 @@ import com.pfe.predictive.inventory.dto.CategoryResponse;
 import com.pfe.predictive.inventory.entity.Category;
 import com.pfe.predictive.inventory.repository.CategoryRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional
 public class CategoryService {
@@ -30,6 +33,7 @@ public class CategoryService {
 
         Category cat = Category.builder().name(name).build();
         Category saved = categoryRepository.save(cat);
+        log.info("Created category: {}", saved.getName());
         return new CategoryResponse(saved.getId(), saved.getName());
     }
 
@@ -39,6 +43,41 @@ public class CategoryService {
                 .stream()
                 .map(c -> new CategoryResponse(c.getId(), c.getName()))
                 .collect(Collectors.toList());
+    }
+    
+    @Transactional(readOnly = true)
+    public CategoryResponse getCategoryById(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Category not found with id: " + id));
+        return new CategoryResponse(category.getId(), category.getName());
+    }
+    
+    public CategoryResponse updateCategory(Long id, CategoryRequest request) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Category not found with id: " + id));
+        
+        String name = request.getName() == null ? null : request.getName().trim();
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Category name is required");
+        }
+        
+        // Check if name already exists (excluding current category)
+        if (!category.getName().equals(name) && categoryRepository.existsByName(name)) {
+            throw new IllegalArgumentException("Category already exists: " + name);
+        }
+        
+        category.setName(name);
+        Category saved = categoryRepository.save(category);
+        log.info("Updated category: {}", saved.getName());
+        return new CategoryResponse(saved.getId(), saved.getName());
+    }
+    
+    public void deleteCategory(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Category not found with id: " + id));
+        
+        categoryRepository.delete(category);
+        log.info("Deleted category: {}", category.getName());
     }
 
     public boolean existsByName(String name) {

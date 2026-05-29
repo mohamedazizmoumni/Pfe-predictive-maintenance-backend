@@ -22,14 +22,16 @@ public class PartRequest implements Serializable {
     @JsonAlias({"partDescription"})
     private String description;
 
-    @JsonAlias({"sku", "part_code"})
+    @JsonAlias({"sku", "part_code", "referenceCode", "reference_code"})
     private String partNumber;
 
-    @JsonAlias({"stock", "quantity"})
+    @JsonAlias({"stock", "quantity", "stockQuantity", "stock_quantity"})
     private Integer currentStock; 
 
     @JsonAlias({"partCategory"})
     private String category;
+
+    private String subCategory;
 
     @JsonAlias({"unitCost", "price"})
     private BigDecimal cost;
@@ -46,4 +48,6 @@ public class PartRequest implements Serializable {
     private String supplier;
 
     private String notes;
+    
+    private String imageUrl;
 }

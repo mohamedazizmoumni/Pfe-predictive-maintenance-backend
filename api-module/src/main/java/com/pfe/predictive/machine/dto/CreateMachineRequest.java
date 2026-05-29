@@ -28,6 +28,12 @@ public class CreateMachineRequest {
     @JsonAlias({"machineLocation", "location_name"})
     private String location;
 
+    @JsonAlias({"machineCategory", "category_name"})
+    private String category;
+
+    @JsonAlias({"machineSubCategory", "sub_category", "subcategory"})
+    private String subCategory;
+
     @JsonAlias({"installationYear", "install_year"})
     private Integer installationYear;
 
@@ -90,6 +96,22 @@ public class CreateMachineRequest {
 
     public void setInstallationYear(Integer installationYear) {
         this.installationYear = installationYear;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getSubCategory() {
+        return subCategory;
+    }
+
+    public void setSubCategory(String subCategory) {
+        this.subCategory = subCategory;
     }
 
     public String getStatus() {
