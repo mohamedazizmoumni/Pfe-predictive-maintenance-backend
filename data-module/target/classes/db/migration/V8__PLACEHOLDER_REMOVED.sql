@@ -1,3 +1,0 @@
--- V8__PLACEHOLDER_REMOVED.sql
--- This migration was removed. Use V9 instead for column additions.
--- Flyway requires this file to exist to mark V8 as resolved, even though it's empty.
