@@ -3,13 +3,20 @@ spring:
     name: predictive-maintenance-backend
     version: 1.0.0
 
+  # No SPRING_PROFILES_ACTIVE set -> defaults to dev, matching the verbose
+  # local-dev behavior this app has always had. Set SPRING_PROFILES_ACTIVE=prod
+  # for a deployment (see application-prod.yml) - only that profile is meant to
+  # run against a real database.
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   # ============================================================================
   # DATABASE
   # ============================================================================
   datasource:
-    url: jdbc:postgresql://localhost:5432/pfe
-    username: postgres
-    password: admin
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/pfe}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:admin}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -80,14 +87,14 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: mohamedaziz.moumni@esprit.tn
-    password: hmux zqbh axin wyuw
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
 
     protocol: smtp
 
     properties:
       mail:
-        debug: true
+        debug: ${MAIL_DEBUG:false}
         smtp:
           auth: true
           starttls:
@@ -102,9 +109,20 @@ spring:
 app:
   frontend-url: http://localhost:4200
 
+  # Demo/sample data seeding (users incl. admin, machines, finance, inventory).
+  # Off by default so an empty production database never gets seeded with
+  # predictable credentials. Set SEED_DEMO_DATA=true for local dev/demo.
+  demo-data:
+    enabled: ${SEED_DEMO_DATA:false}
+
   mail:
     enabled: true
     from: mohamedaziz.moumni@esprit.tn
+    from-name: Sentinel Predictive Maintenance
+    # Where visitor-submitted contact/demo inquiries from the public
+    # marketing site get emailed. Falls back to every ADMIN/SUPER_ADMIN's
+    # own address (same as alert emails) when unset.
+    contact-inbox: ${CONTACT_INBOX_EMAIL:maziz5802@gmail.com}
 
     task:
       enabled: true
@@ -113,26 +131,12 @@ app:
       enabled: true
 
 # ============================================================================
-# LOGGING
+# LOGGING (INFO-level safe default; application-dev.yml adds verbosity)
 # ============================================================================
 logging:
   level:
     root: INFO
-
-    # Application logs
-    com.pfe.predictive: DEBUG
-
-    # Email logs
-    org.springframework.mail: DEBUG
-    org.springframework.mail.javamail: DEBUG
-    jakarta.mail: DEBUG
-    javax.mail: DEBUG
-
-    # SQL logs
-    org.hibernate.SQL: DEBUG
-
-    # Security logs
-    org.springframework.security: DEBUG
+    com.pfe.predictive: INFO
 
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
@@ -173,24 +177,15 @@ management:
 # ============================================================================
 # JWT
 # ============================================================================
+# JWT_SECRET must be set via .env / environment — no insecure fallback here.
+# JwtTokenProvider fails startup if it's missing or matches a known placeholder.
 jwt:
-  secret: your-super-secret-jwt-key-change-this-in-production-at-least-256-bits-long-minimum-32-characters
+  secret: ${JWT_SECRET:}
 
   expiration: 3600000
 
   refresh:
     expiration: 604800000
-
-# ============================================================================
-# SECURITY
-# ============================================================================
-security:
-  jwt:
-    secret: your-super-secret-jwt-key-change-this-in-production-at-least-256-bits-long-minimum-32-characters
-
-    expiration: 3600000
-
-    refresh-expiration: 604800000
 
 # ============================================================================
 # CORS
@@ -200,6 +195,9 @@ cors:
     - http://localhost:4200
     - http://127.0.0.1:4200
     - http://localhost:3000
+    # Marketing site (sentinel-client side) dev server
+    - http://localhost:4300
+    - http://127.0.0.1:4300
 
   allowed-methods:
     - GET
@@ -230,8 +228,11 @@ alert:
   notifications:
     enabled: true
 
-    critical-alert-recipients:
-      - mohamedaziz.moumni@gmail.com
+    # Not currently read anywhere (AlertNotificationProperties.criticalAlertRecipients
+    # has no caller — real alert emails go to users with MANAGER/ADMIN/SUPER_ADMIN
+    # roles instead, see EmailService.ALERT_RECIPIENT_ROLES). Left empty rather
+    # than hardcoding a personal address in a tracked file for no functional reason.
+    critical-alert-recipients: []
 
   aging:
     days-to-close: 90
@@ -250,6 +251,12 @@ machine:
 maintenance:
   days-overdue-threshold: 7
   auto-escalation-enabled: false
+  # How often MaintenanceEscalationScheduler checks for overdue work orders (ms).
+  # Only matters once auto-escalation-enabled is true.
+  escalation-check-interval-ms: 3600000
+  # Default recurrence used to set Machine.nextMaintenanceDate when a rapport
+  # gets final approval, until a real MaintenanceTemplate entity exists.
+  default-recurrence-days: 90
 
 # ============================================================================
 # PREDICTION SETTINGS
@@ -263,7 +270,7 @@ prediction:
 # ============================================================================
 nlp:
   service:
-    url: http://localhost:8000
+    url: ${NLP_SERVICE_URL:http://localhost:8000}
     connect-timeout-ms: 5000
     read-timeout-ms: 15000
 
@@ -273,8 +280,13 @@ nlp:
 telemetry:
   replay:
     enabled: true
-    tick-interval-ms: 2000
+    tick-interval-ms: 5000
     default-speed: 1.0
+    # Points at the real NASA C-MAPSS train_FD001.txt (etc.) shipped in the
+    # ml_service repo's data/ folder. Empty by default - telemetry replay
+    # stays idle (logged as a warning, not an error) until this is set.
+    # Comma-separate multiple resources; Spring Resource syntax (file:, classpath:).
+    dataset-resources: ${TELEMETRY_DATASET_RESOURCES:}
 
 # ============================================================================
 # INVENTORY
@@ -282,6 +294,10 @@ telemetry:
 inventory:
   low-stock-threshold-percentage: 20
   reorder-lead-time-days: 5
+  auto-reorder-enabled: false
+  # How often AutoReorderScheduler checks for parts below the reorder trigger (ms).
+  # Only matters once auto-reorder-enabled is true.
+  auto-reorder-check-interval-ms: 3600000
 
 # ============================================================================
 # OPENAI
@@ -308,17 +324,28 @@ chatbot:
 # ML SERVICES
 # ============================================================================
 ml:
-  internal-api-key: sentinel-dev-secret
+  internal-api-key: ${ML_INTERNAL_API_KEY:sentinel-dev-secret}
 
   predictive:
-    url: http://localhost:5000
+    url: ${ML_PREDICTIVE_URL:http://localhost:8000}
 
   face:
-    url: http://localhost:5001
+    url: ${ML_FACE_URL:http://localhost:8000}
+
+  # ml.service.* backs MlServiceProperties (PythonMlClient / RestClient-based on-demand /ml/predict path).
+  # Without this block, PythonMlClient sends no auth header and every call 401s against ml_service's
+  # require_internal_key middleware — same root cause as the MLServiceClient fix above, different client.
+  service:
+    base-url: ${ML_PREDICTIVE_URL:http://localhost:8000}
+    auth:
+      header-name: X-Internal-Key
+      header-value: ${ml.internal-api-key}
 
 # ============================================================================
 # FACE LOGIN
 # ============================================================================
 face-login:
   service:
-    base-url: http://localhost:5001
+    base-url: ${ML_FACE_URL:http://localhost:8000}
+    recognize-path: /face/recognize
+    enroll-path: /face/enroll

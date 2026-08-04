@@ -4,8 +4,10 @@ import com.pfe.predictive.core.entity.Maintenance;
 import com.pfe.predictive.core.entity.MaintenanceStatus;
 import com.pfe.predictive.data.repository.MaintenanceRepository;
 import com.pfe.predictive.dashboard.dto.DashboardSummaryDTO;
+import com.pfe.predictive.security.PermissionConstants;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,6 +26,7 @@ public class DashboardController {
     }
 
     @GetMapping("/maintenance")
+    @PreAuthorize(PermissionConstants.PERM_DASHBOARD_READ)
     public ResponseEntity<DashboardSummaryDTO.MaintenanceStats> getMaintenanceStats() {
         List<Maintenance> allMaintenance = maintenanceRepository.findAll();
 

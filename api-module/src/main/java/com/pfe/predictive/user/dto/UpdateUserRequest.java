@@ -15,6 +15,12 @@ public class UpdateUserRequest {
     @Email(message = "Email should be valid")
     private String email;
 
+    // Admin-only "reset password" action — see UserController.updateUser,
+    // which only ever honors this when the caller is ADMIN/SUPER_ADMIN.
+    // There is no self-service password change endpoint by design.
+    @Size(min = 8, message = "Password must be at least 8 characters")
+    private String password;
+
     private String department;
 
     private String phoneNumber;
@@ -58,6 +64,14 @@ public class UpdateUserRequest {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 
     public String getDepartment() {

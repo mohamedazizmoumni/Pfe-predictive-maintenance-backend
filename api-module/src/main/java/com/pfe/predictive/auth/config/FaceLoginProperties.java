@@ -9,9 +9,9 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "face-login.service")
 public class FaceLoginProperties {
 
-    private String baseUrl = "http://localhost:5001";
-    private String recognizePath = "/recognize";
-    private String enrollPath = "/enroll";
+    private String baseUrl = "http://localhost:8000";
+    private String recognizePath = "/face/recognize";
+    private String enrollPath = "/face/enroll";
     private String imageFieldName = "image";
     private final Timeout timeout = new Timeout();
 

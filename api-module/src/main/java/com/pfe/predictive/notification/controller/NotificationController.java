@@ -35,7 +35,7 @@ public class NotificationController {
      * @return list of notifications
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER')")
+    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER','FINANCE_MANAGER')")
     @Operation(summary = "Get notifications", description = "Retrieve notifications, optionally filtered by role")
     public ResponseEntity<List<Notification>> getNotifications(
             @RequestParam(required = false) String role) {
@@ -44,7 +44,9 @@ public class NotificationController {
             List<Notification> notifications;
 
             if (role != null && !role.isBlank()) {
-                notifications = notificationRepository.findByTargetRolesContainingOrderByCreatedAtDesc(role);
+                notifications = notificationRepository
+                        .findByTargetRolesContainingOrderByCreatedAtDesc(role, PageRequest.of(0, 50))
+                        .getContent();
             } else {
                 notifications = notificationRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, 50))
                         .getContent();
@@ -64,19 +66,29 @@ public class NotificationController {
     }
 
     /**
-     * Get count of unread notifications.
-     * 
+     * Get count of unread notifications, optionally scoped to a role.
+     *
+     * Must mirror getNotifications' role filter exactly - the header bell's
+     * badge count and its panel list come from these two endpoints
+     * separately, and previously used different filters (this one was
+     * unfiltered while the list was role-scoped), so the badge could show a
+     * nonzero count while the panel opened empty.
+     *
+     * @param role optional role filter (e.g., "MANAGER") - same param as getNotifications
      * @return count of unread notifications
      */
     @GetMapping("/unread-count")
-    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER')")
-    @Operation(summary = "Get unread notification count", description = "Returns the number of unread notifications")
-    public ResponseEntity<Map<String, Object>> getUnreadCount() {
+    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER','FINANCE_MANAGER')")
+    @Operation(summary = "Get unread notification count", description = "Returns the number of unread notifications, optionally filtered by role")
+    public ResponseEntity<Map<String, Object>> getUnreadCount(
+            @RequestParam(required = false) String role) {
         try {
-            long count = notificationRepository.countByIsReadFalse();
+            long count = (role != null && !role.isBlank())
+                    ? notificationRepository.countByIsReadFalseAndTargetRolesContaining(role)
+                    : notificationRepository.countByIsReadFalse();
             return ResponseEntity.ok(Map.of("count", count));
         } catch (Exception e) {
-            log.error("Error counting unread notifications", e);
+            log.error("Error counting unread notifications for role: {}", role, e);
             // Return 0 on error instead of 500
             return ResponseEntity.ok(Map.of("count", 0));
         }
@@ -89,7 +101,7 @@ public class NotificationController {
      * @return 200 OK on success, 404 if not found
      */
     @PutMapping("/{id}/read")
-    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER')")
+    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER','FINANCE_MANAGER')")
     @Operation(summary = "Mark notification as read", description = "Set isRead flag to true for a notification")
     public ResponseEntity<?> markAsRead(@PathVariable Long id) {
         return notificationRepository.findById(id)
@@ -110,7 +122,7 @@ public class NotificationController {
      * @return count of updated notifications
      */
     @PutMapping("/read-all")
-    @PreAuthorize("hasAnyRole('MANAGER','ADMIN','SUPER_ADMIN','STOCK_MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN','SUPER_ADMIN','STOCK_MANAGER','FINANCE_MANAGER')")
     @Operation(summary = "Mark all notifications as read", description = "Set isRead flag to true for all unread notifications")
     public ResponseEntity<Map<String, Object>> markAllAsRead() {
         List<Notification> unreadNotifications = notificationRepository.findByIsReadFalseOrderByCreatedAtDesc();
@@ -130,10 +142,12 @@ public class NotificationController {
      * @return list of notifications for the machine
      */
     @GetMapping("/machine/{machineId}")
-    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER')")
+    @PreAuthorize("hasAnyRole('TECHNICIAN','MANAGER','ADMIN','DATA_SCIENTIST','SUPER_ADMIN','STOCK_MANAGER','FINANCE_MANAGER')")
     @Operation(summary = "Get machine notifications", description = "Retrieve all notifications for a specific machine")
     public ResponseEntity<List<Notification>> getMachineNotifications(@PathVariable Long machineId) {
-        List<Notification> notifications = notificationRepository.findByMachineIdOrderByCreatedAtDesc(machineId);
+        List<Notification> notifications = notificationRepository
+                .findByMachineIdOrderByCreatedAtDesc(machineId, PageRequest.of(0, 100))
+                .getContent();
         return ResponseEntity.ok(notifications);
     }
 }

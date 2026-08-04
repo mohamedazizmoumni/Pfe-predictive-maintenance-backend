@@ -5,6 +5,7 @@ import com.pfe.predictive.inventory.dto.StockOrderResponse;
 import com.pfe.predictive.inventory.entity.ReorderRequest;
 import com.pfe.predictive.inventory.entity.StockOrder;
 import com.pfe.predictive.inventory.entity.StockOrderStatus;
+import com.pfe.predictive.inventory.entity.Supplier;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -26,6 +27,8 @@ public class StockOrderMapper {
             .quantity(order.getQuantity())
             .cost(order.getCost())
             .status(order.getStatus().toString())
+            .supplierId(order.getSupplier() != null ? order.getSupplier().getId() : null)
+            .supplierName(order.getSupplier() != null ? order.getSupplier().getName() : null)
             .supplierPurchaseOrder(order.getSupplierPurchaseOrder())
             .orderedDate(order.getOrderedDate() != null ? order.getOrderedDate().toString() : null)
             .expectedDeliveryDate(order.getExpectedDeliveryDate())
@@ -36,6 +39,10 @@ public class StockOrderMapper {
     }
 
     public StockOrder toEntity(StockOrderRequest request, ReorderRequest reorder, String orderedBy) {
+        return toEntity(request, reorder, orderedBy, null);
+    }
+
+    public StockOrder toEntity(StockOrderRequest request, ReorderRequest reorder, String orderedBy, Supplier supplier) {
         if (request == null || reorder == null) {
             return null;
         }
@@ -46,6 +53,7 @@ public class StockOrderMapper {
             .quantity(reorder.getQuantity())
             .cost(calculateTotalCost(reorder))
             .status(StockOrderStatus.PENDING)
+            .supplier(supplier)
             .supplierPurchaseOrder(request.getSupplierPurchaseOrder())
             .expectedDeliveryDate(request.getExpectedDeliveryDate())
             .orderedBy(orderedBy)

@@ -14,6 +14,15 @@ import java.util.stream.Collectors;
 
 public class FlexibleStringListDeserializer extends JsonDeserializer<List<String>> {
 
+    // Jackson short-circuits an explicit JSON `null` straight to `null`
+    // without ever calling deserialize() — the VALUE_NULL branch below is
+    // otherwise unreachable. Overriding this is what actually makes
+    // `"keywords": null` normalize to an empty list instead of null.
+    @Override
+    public List<String> getNullValue(DeserializationContext context) {
+        return Collections.emptyList();
+    }
+
     @Override
     public List<String> deserialize(JsonParser parser, DeserializationContext context) throws IOException {
         JsonToken token = parser.currentToken();

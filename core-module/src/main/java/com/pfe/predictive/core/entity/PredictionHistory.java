@@ -103,7 +103,10 @@ public class PredictionHistory {
     
     @Column(name = "ml_prediction_available")
     private Boolean mlPredictionAvailable;
-    
+
+    @Column(name = "model_version", length = 50)
+    private String modelVersion;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
     

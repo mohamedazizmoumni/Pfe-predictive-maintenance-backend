@@ -92,6 +92,40 @@ public class Alert {
     @Column(length = 1000)
     private String recommendations;
 
+    @Column(name = "issue_type", length = 100)
+    private String issueType;
+
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = false;
+
+    @Column(name = "resolved_date")
+    private LocalDateTime resolvedDate;
+
+    @Column(name = "last_email_sent_at")
+    private LocalDateTime lastEmailSentAt;
+
+    @Column(name = "health_score")
+    private Double healthScore;
+
+    @Column(name = "predicted_rul")
+    private Double predictedRUL;
+
+    @Column(name = "anomaly_probability")
+    private Double anomalyProbability;
+
+    @Column(name = "risk_level", length = 20)
+    private String riskLevel;
+
+    @Column(name = "failure_probability")
+    private Double failureProbability;
+
+    @Column(name = "anomaly_type", length = 50)
+    private String anomalyType;
+
+    @Column(name = "predicted_failure_type", length = 50)
+    private String predictedFailureType;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdDate;
@@ -114,7 +148,9 @@ public class Alert {
         return switch (status) {
             case NEW -> "New (Not Acknowledged)";
             case ACKNOWLEDGED -> "Acknowledged";
+            case IN_PROGRESS -> "In Progress";
             case ESCALATED -> "Escalated";
+            case RESOLVED -> "Resolved";
             case CLOSED -> "Closed";
         };
     }
@@ -123,6 +159,7 @@ public class Alert {
         return switch (severity) {
             case INFO -> "blue";
             case WARNING -> "yellow";
+            case HIGH -> "orange";
             case CRITICAL -> "red";
         };
     }

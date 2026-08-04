@@ -2,3 +2,23 @@
 .env
 .env.*
 !.env.example
+
+# Maven build output
+target/
+*.class
+
+# Runtime data (uploaded files, application logs)
+**/uploads/
+**/logs/
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# OS
+.DS_Store
+Thumbs.db

@@ -90,17 +90,66 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
 
                 .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/public/**").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/error").permitAll()
 
-                .requestMatchers("/health", "/actuator/**").permitAll()
+                .requestMatchers("/health").permitAll()
+                .requestMatchers("/actuator/**")
+                    .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+
+                // Profile picture GET is public so <img> tags work without JWT
+                .requestMatchers(HttpMethod.GET, "/api/v1/profile/*/picture").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/profile/*/picture/exists").permitAll()
+
+                // Uploaded static files (part images, profile pictures) are served via
+                // StaticResourceConfig and rendered through plain <img> tags, which don't
+                // send the Authorization header — must be public GET, same reasoning as above.
+                .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+
+                // ML service posts inventory shortage predictions here. No JWT from an
+                // external ML caller, so this bypasses JWT auth and is instead validated
+                // via the X-Internal-Key header inside InventoryController, the same
+                // shared-secret trust model already used for outbound Java->ML calls
+                // (see MlRestTemplateConfig).
+                .requestMatchers(HttpMethod.POST, "/api/v1/inventory/parts/*/shortage-forecast").permitAll()
+
+                // User management: read is open to all authenticated users;
+                // write (create / update / delete / face-reset) is admin-only
+                // (enforced at the controller level via @PreAuthorize — kept
+                // here as a defence-in-depth layer).
+                //
+                // Profile-picture sub-resource is the exception: any authenticated
+                // user may manage their own picture (self-or-admin check is
+                // enforced in UserProfilePictureController's @PreAuthorize), so
+                // these narrower matchers must come before the general /users/**
+                // admin-only rules below (Spring Security uses the first match).
+                .requestMatchers(HttpMethod.GET, "/api/v1/users/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/v1/users/*/profile-picture").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/users/*/profile-picture").authenticated()
+                .requestMatchers(HttpMethod.POST,   "/api/v1/users/**")
+                    .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+                // PUT (update) is the exception: any authenticated user may edit
+                // their own profile (name/email/phone/department), same self-or-admin
+                // pattern as the profile-picture matchers above — the real ownership
+                // check (self vs. admin, and which fields a non-admin may touch) lives
+                // in UserController.updateUser's @PreAuthorize + in-method check.
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/users/**").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/users/**")
+                    .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                 
                 // WebSocket endpoints - allow for handshake
                 .requestMatchers("/ws-machine/**").permitAll()
                 .requestMatchers("/ws-nlp/**").permitAll()
+                .requestMatchers("/ws-alerts/**").permitAll()
                 .requestMatchers("/topic/**").permitAll()
                 .requestMatchers("/app/**").permitAll()
-                .requestMatchers("/api/v1/streaming/**").permitAll()
+
+                // Trigger endpoints force ML calls, DB writes, and alert/email dispatch —
+                // admin-only. Info/health are read-only and just need a valid session.
+                .requestMatchers(HttpMethod.POST, "/api/v1/streaming/trigger", "/api/v1/streaming/trigger/**")
+                    .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/v1/streaming/**").authenticated()
 
                 .requestMatchers("/api/nlp/**")
                     .hasAnyAuthority("ROLE_TECHNICIAN", "ROLE_MANAGER", "ROLE_DATA_SCIENTIST", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")

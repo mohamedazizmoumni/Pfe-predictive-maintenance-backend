@@ -20,6 +20,8 @@ public class StockOrderResponse implements Serializable {
     private Integer quantity;
     private BigDecimal cost;
     private String status;
+    private Long supplierId;
+    private String supplierName;
     private String supplierPurchaseOrder;
     private String orderedDate;
     private String expectedDeliveryDate;

@@ -1,5 +1,6 @@
 package com.pfe.predictive.common.exception;
 
+import com.pfe.predictive.auth.exception.AuthRateLimitExceededException;
 import com.pfe.predictive.auth.exception.FaceLoginUnauthorizedException;
 import com.pfe.predictive.auth.exception.FaceNotDetectedException;
 import com.pfe.predictive.ml.exception.MlBadRequestException;
@@ -13,6 +14,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -20,6 +22,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -45,6 +50,15 @@ public class GlobalExceptionHandler {
 
         Map<String, Object> body = baseBody(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(
+            AccessDeniedException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> body = baseBody(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
     @ExceptionHandler(FaceNotDetectedException.class)
@@ -95,6 +109,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MlRateLimitExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMlRateLimitExceeded(
             MlRateLimitExceededException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> body = baseBody(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(body);
+    }
+
+    @ExceptionHandler(AuthRateLimitExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthRateLimitExceeded(
+            AuthRateLimitExceededException ex,
             HttpServletRequest request) {
 
         Map<String, Object> body = baseBody(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request.getRequestURI());
@@ -152,6 +175,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalState(
+            IllegalStateException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> body = baseBody(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
             DataIntegrityViolationException ex,
@@ -172,6 +204,45 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
 
         Map<String, Object> body = baseBody(HttpStatus.BAD_REQUEST, "Malformed or invalid request payload", request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingServletRequestPart(
+            MissingServletRequestPartException ex,
+            HttpServletRequest request) {
+
+        String message = "Required part '" + ex.getRequestPartName() + "' is missing from the request";
+        Map<String, Object> body = baseBody(HttpStatus.BAD_REQUEST, message, request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> body = baseBody(HttpStatus.UNSUPPORTED_MEDIA_TYPE, 
+            "Content type not supported. Expected multipart/form-data for file uploads", 
+            request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(body);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request) {
+
+        // Without this handler, a malformed request param (e.g.
+        // ?assignedTechnicianId=someUsername against a Long-typed param)
+        // falls through to the catch-all RuntimeException handler below and
+        // gets reported as a 500 "Internal server error" — misleading for
+        // both the client (it's their bad input, not a server fault) and
+        // monitoring/alerting (500s page as server incidents).
+        String requiredType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "the expected type";
+        String message = "Parameter '" + ex.getName() + "' must be " + requiredType
+                + ", got '" + ex.getValue() + "'";
+        Map<String, Object> body = baseBody(HttpStatus.BAD_REQUEST, message, request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 

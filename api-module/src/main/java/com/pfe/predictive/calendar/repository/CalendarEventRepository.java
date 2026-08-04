@@ -1,6 +1,8 @@
 package com.pfe.predictive.calendar.repository;
 
 import com.pfe.predictive.calendar.entity.CalendarEvent;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,6 +21,9 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
      * Find events by assigned technician
      */
     List<CalendarEvent> findByAssignedTo(String assignedTo);
+
+    // Paginated variant - a technician's full event history grows without bound.
+    Page<CalendarEvent> findByAssignedTo(String assignedTo, Pageable pageable);
 
     /**
      * Find events by assigned technician and date range
@@ -44,6 +49,9 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
      * Find events by machine
      */
     List<CalendarEvent> findByMachineId(Long machineId);
+
+    // Paginated variant - a machine's full event history grows without bound.
+    Page<CalendarEvent> findByMachineId(Long machineId, Pageable pageable);
 
     /**
      * Find events by task

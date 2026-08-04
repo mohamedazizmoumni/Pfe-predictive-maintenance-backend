@@ -17,6 +17,7 @@ public class PermissionConstants {
     public static final String ROLE_TECHNICIAN = "ROLE_TECHNICIAN";
     public static final String ROLE_MANAGER = "ROLE_MANAGER";
     public static final String ROLE_STOCK_MANAGER = "ROLE_STOCK_MANAGER";
+    public static final String ROLE_FINANCE_MANAGER = "ROLE_FINANCE_MANAGER";
     public static final String ROLE_DATA_SCIENTIST = "ROLE_DATA_SCIENTIST";
     public static final String ROLE_ADMIN = "ROLE_ADMIN";
     public static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
@@ -36,8 +37,13 @@ public class PermissionConstants {
     public static final String PERM_MAINTENANCE_DELETE =
         "hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')";
 
+    // Technician is included here because a technician may self-accept a
+    // task assigned to them (accept -> start -> complete, their own work
+    // order only); MaintenanceController enforces the "own task" ownership
+    // check for technician callers — Manager/Admin/Super Admin may approve
+    // any task.
     public static final String PERM_MAINTENANCE_APPROVE =
-        "hasAnyAuthority('ROLE_MANAGER','ROLE_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_TECHNICIAN','ROLE_MANAGER','ROLE_ADMIN','ROLE_SUPER_ADMIN')";
 
     // ========================================================================
     // INVENTORY PERMISSIONS
@@ -97,16 +103,16 @@ public class PermissionConstants {
         "hasAnyAuthority('ROLE_MANAGER','ROLE_ADMIN','ROLE_SUPER_ADMIN')";
 
     public static final String PERM_ALERT_DELETE =
-        "hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_MANAGER','ROLE_ADMIN','ROLE_SUPER_ADMIN')";
 
     // ========================================================================
     // MACHINE PERMISSIONS
     // ========================================================================
     public static final String PERM_MACHINE_READ =
-        "hasAnyAuthority('ROLE_TECHNICIAN','ROLE_MANAGER','ROLE_DATA_SCIENTIST','ROLE_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_TECHNICIAN','ROLE_MANAGER','ROLE_STOCK_MANAGER','ROLE_FINANCE_MANAGER','ROLE_DATA_SCIENTIST','ROLE_ADMIN','ROLE_SUPER_ADMIN')";
 
     public static final String PERM_MACHINE_CREATE =
-        "hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_MANAGER','ROLE_ADMIN','ROLE_SUPER_ADMIN')";
 
     public static final String PERM_MACHINE_UPDATE =
         "hasAnyAuthority('ROLE_MANAGER','ROLE_ADMIN','ROLE_SUPER_ADMIN')";

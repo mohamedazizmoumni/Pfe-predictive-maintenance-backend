@@ -18,6 +18,7 @@ public class MaintenanceDto {
     private String approvedBy;
     private Long assignedTechnicianId;
     private String notes;
+    private String rootCause;
 
     public Long getId() {
         return id;
@@ -129,5 +130,13 @@ public class MaintenanceDto {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getRootCause() {
+        return rootCause;
+    }
+
+    public void setRootCause(String rootCause) {
+        this.rootCause = rootCause;
     }
 }

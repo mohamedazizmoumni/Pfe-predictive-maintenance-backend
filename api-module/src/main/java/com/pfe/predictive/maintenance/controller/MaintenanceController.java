@@ -1,5 +1,6 @@
 package com.pfe.predictive.maintenance.controller;
 
+import com.pfe.predictive.audit.service.AuditEventService;
 import com.pfe.predictive.common.service.EmailService;
 import com.pfe.predictive.core.entity.Maintenance;
 import com.pfe.predictive.core.entity.MaintenancePriority;
@@ -13,6 +14,7 @@ import com.pfe.predictive.maintenance.dto.MaintenanceDto;
 import com.pfe.predictive.maintenance.dto.MaintenancePageResponse;
 import com.pfe.predictive.maintenance.mapper.MaintenanceMapper;
 import com.pfe.predictive.common.exception.ResourceNotFoundException;
+import com.pfe.predictive.security.PermissionConstants;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -23,6 +25,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Objects;
@@ -36,18 +41,22 @@ public class MaintenanceController {
     private final MachineRepository machineRepository;
     private final EmailService emailService;
     private final UserRepository userRepository;
+    private final AuditEventService auditEventService;
 
     public MaintenanceController(MaintenanceRepository maintenanceRepository,
                                  MachineRepository machineRepository,
                                  EmailService emailService,
-                                 UserRepository userRepository) {
+                                 UserRepository userRepository,
+                                 AuditEventService auditEventService) {
         this.maintenanceRepository = maintenanceRepository;
         this.machineRepository = machineRepository;
         this.emailService = emailService;
         this.userRepository = userRepository;
+        this.auditEventService = auditEventService;
     }
 
     @PostMapping
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_CREATE)
     public ResponseEntity<MaintenanceDto> createMaintenance(@RequestBody @Valid MaintenanceRequest request) {
         if (!machineRepository.existsById(request.getMachineId())) {
             throw new ResourceNotFoundException("Machine not found with id " + request.getMachineId());
@@ -55,7 +64,7 @@ public class MaintenanceController {
 
         Maintenance maintenance = new Maintenance();
         maintenance.setMachineId(request.getMachineId());
-        maintenance.setType(request.getType());
+        maintenance.setType(request.getType() != null ? request.getType() : MaintenanceType.CORRECTIVE);
         maintenance.setPriority(request.getPriority() != null ? request.getPriority() : MaintenancePriority.MEDIUM);
         maintenance.setDescription(request.getDescription());
         maintenance.setStatus(request.getStatus() != null ? request.getStatus() : MaintenanceStatus.SCHEDULED);
@@ -78,12 +87,14 @@ public class MaintenanceController {
     }
 
     @GetMapping
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_READ)
     public ResponseEntity<MaintenancePageResponse> getMaintenance(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "priority", required = false) String priority,
-            @RequestParam(value = "machineId", required = false) Long machineId) {
+            @RequestParam(value = "machineId", required = false) Long machineId,
+            @RequestParam(value = "assignedTechnicianId", required = false) Long assignedTechnicianId) {
 
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
@@ -95,7 +106,7 @@ public class MaintenanceController {
         } else {
             MaintenanceStatus parsedStatus = parseStatus(status);
             MaintenancePriority parsedPriority = parsePriority(priority);
-            result = maintenanceRepository.findByStatusAndPriority(parsedStatus, parsedPriority, pageable);
+            result = maintenanceRepository.findByStatusAndPriority(parsedStatus, parsedPriority, assignedTechnicianId, pageable);
         }
 
         MaintenancePageResponse response = new MaintenancePageResponse(
@@ -109,6 +120,7 @@ public class MaintenanceController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_READ)
     public ResponseEntity<MaintenanceDto> getMaintenanceById(@PathVariable Long id) {
         return maintenanceRepository.findById(id)
                 .map(MaintenanceMapper::toDto)
@@ -117,6 +129,7 @@ public class MaintenanceController {
     }
 
     @PostMapping("/{id}/start")
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_UPDATE)
     public ResponseEntity<MaintenanceDto> startMaintenance(@PathVariable Long id) {
         Maintenance maintenance = maintenanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
@@ -126,6 +139,7 @@ public class MaintenanceController {
     }
 
     @PostMapping("/{id}/complete")
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_UPDATE)
     public ResponseEntity<MaintenanceDto> completeMaintenance(@PathVariable Long id) {
         Maintenance maintenance = maintenanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
@@ -135,26 +149,50 @@ public class MaintenanceController {
     }
 
     @PostMapping("/{id}/approve")
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_APPROVE)
     public ResponseEntity<MaintenanceDto> approveMaintenance(
             @PathVariable Long id,
-            @RequestParam String approvedBy) {
+            @RequestParam String approvedBy,
+            Authentication authentication) {
         Maintenance maintenance = maintenanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
+
+        boolean isPrivileged = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_MANAGER")
+                        || a.getAuthority().equals("ROLE_ADMIN")
+                        || a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+
+        if (!isPrivileged) {
+            // Technician caller: only the assigned technician may accept their own task.
+            User caller = userRepository.findByUsername(authentication.getName())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found: " + authentication.getName()));
+            if (maintenance.getAssignedTechnicianId() == null
+                    || !maintenance.getAssignedTechnicianId().equals(caller.getId())) {
+                throw new AccessDeniedException("You can only accept a task assigned to you");
+            }
+        }
+
         maintenance.setStatus(MaintenanceStatus.APPROVED);
         maintenance.setApprovedDate(java.time.LocalDateTime.now());
         maintenance.setApprovedBy(approvedBy);
-        return ResponseEntity.ok(MaintenanceMapper.toDto(maintenanceRepository.save(maintenance)));
+        Maintenance approved = maintenanceRepository.save(maintenance);
+        auditEventService.record(approvedBy, "MAINTENANCE_APPROVED", "Maintenance", approved.getId(), null);
+        return ResponseEntity.ok(MaintenanceMapper.toDto(approved));
     }
 
     @PostMapping("/{id}/cancel")
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_UPDATE)
     public ResponseEntity<MaintenanceDto> cancelMaintenance(@PathVariable Long id) {
         Maintenance maintenance = maintenanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
         maintenance.setStatus(MaintenanceStatus.CANCELLED);
-        return ResponseEntity.ok(MaintenanceMapper.toDto(maintenanceRepository.save(maintenance)));
+        Maintenance cancelled = maintenanceRepository.save(maintenance);
+        auditEventService.record("MAINTENANCE_CANCELLED", "Maintenance", cancelled.getId(), null);
+        return ResponseEntity.ok(MaintenanceMapper.toDto(cancelled));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_UPDATE)
     public ResponseEntity<MaintenanceDto> updateMaintenance(
             @PathVariable Long id,
             @RequestBody MaintenanceRequest request) {
@@ -163,6 +201,7 @@ public class MaintenanceController {
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
 
         Long previousAssignedTechnicianId = maintenance.getAssignedTechnicianId();
+        MaintenanceStatus previousStatus = maintenance.getStatus();
 
         if (request.getType() != null) maintenance.setType(request.getType());
         if (request.getPriority() != null) maintenance.setPriority(request.getPriority());
@@ -178,22 +217,31 @@ public class MaintenanceController {
             maintenance.setAssignedTechnicianId(request.getAssignedTechnicianId());
         if (request.getApprovedBy() != null) maintenance.setApprovedBy(request.getApprovedBy());
         if (request.getNotes() != null) maintenance.setNotes(request.getNotes());
+        if (request.getRootCause() != null) maintenance.setRootCause(request.getRootCause());
 
         Maintenance saved = maintenanceRepository.save(maintenance);
 
         if (request.getAssignedTechnicianId() != null
                 && !Objects.equals(previousAssignedTechnicianId, saved.getAssignedTechnicianId())) {
             sendAssignmentEmail(saved);
+            auditEventService.record("MAINTENANCE_TECHNICIAN_ASSIGNED", "Maintenance", saved.getId(),
+                    "technicianId=" + saved.getAssignedTechnicianId());
+        }
+        if (previousStatus != saved.getStatus()) {
+            auditEventService.record("MAINTENANCE_STATUS_CHANGED", "Maintenance", saved.getId(),
+                    previousStatus + " -> " + saved.getStatus());
         }
 
         return ResponseEntity.ok(MaintenanceMapper.toDto(saved));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize(PermissionConstants.PERM_MAINTENANCE_DELETE)
     public ResponseEntity<Void> deleteMaintenance(@PathVariable Long id) {
         Maintenance maintenance = maintenanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
         maintenanceRepository.delete(maintenance);
+        auditEventService.record("MAINTENANCE_DELETED", "Maintenance", id, null);
         return ResponseEntity.noContent().build();
     }
 
@@ -274,7 +322,7 @@ public class MaintenanceController {
 
     public static class MaintenanceRequest {
         @NotNull  private Long machineId;
-        @NotNull  private MaintenanceType type;
+                  private MaintenanceType type;
                   private MaintenancePriority priority;
         @NotBlank private String description;
                   private MaintenanceStatus status;
@@ -286,6 +334,7 @@ public class MaintenanceController {
                   private Long assignedTechnicianId;
                   private String approvedBy;
                   private String notes;
+                  private String rootCause;
 
         public Long getMachineId() { return machineId; }
         public void setMachineId(Long machineId) { this.machineId = machineId; }
@@ -313,5 +362,7 @@ public class MaintenanceController {
         public void setApprovedBy(String approvedBy) { this.approvedBy = approvedBy; }
         public String getNotes() { return notes; }
         public void setNotes(String notes) { this.notes = notes; }
+        public String getRootCause() { return rootCause; }
+        public void setRootCause(String rootCause) { this.rootCause = rootCause; }
     }
 }

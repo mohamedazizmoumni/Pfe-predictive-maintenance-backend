@@ -13,6 +13,7 @@ import java.io.Serializable;
 @AllArgsConstructor
 public class StockOrderRequest implements Serializable {
     private Long reorderRequestId;
+    private Long supplierId;
     private String supplierPurchaseOrder;
     private String expectedDeliveryDate;
     private String notes;

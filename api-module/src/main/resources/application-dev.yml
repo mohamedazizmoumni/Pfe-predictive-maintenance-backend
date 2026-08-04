@@ -1,0 +1,21 @@
+# ============================================================================
+# DEV PROFILE — active by default (spring.profiles.active defaults to "dev").
+# Verbose logging for local debugging. Never use this profile in production.
+# ============================================================================
+logging:
+  level:
+    com.pfe.predictive: DEBUG
+    org.springframework.mail: DEBUG
+    org.springframework.mail.javamail: DEBUG
+    jakarta.mail: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework.security: DEBUG
+
+spring:
+  mail:
+    properties:
+      mail:
+        debug: true
+
+  jpa:
+    show-sql: true

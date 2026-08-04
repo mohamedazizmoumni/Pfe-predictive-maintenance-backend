@@ -11,6 +11,7 @@ import com.pfe.predictive.core.entity.Task;
 import com.pfe.predictive.data.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +22,9 @@ import java.util.List;
 
 /**
  * Comprehensive Data Initializer
- * Seeds the database with complete sample data for all modules
+ * Seeds the database with complete sample data for all modules.
+ *
+ * Gated behind SEED_DEMO_DATA (default off) - see RealisticDataInitializer.
  */
 @Slf4j
 @Component
@@ -33,8 +36,16 @@ public class ComprehensiveDataInitializer implements CommandLineRunner {
     private final TaskRepository taskRepository;
     private final CalendarEventRepository calendarEventRepository;
 
+    @Value("${app.demo-data.enabled:false}")
+    private boolean demoDataEnabled;
+
     @Override
     public void run(String... args) {
+        if (!demoDataEnabled) {
+            log.info("⏭️ Demo data seeding disabled (set SEED_DEMO_DATA=true to enable) - skipping");
+            return;
+        }
+
         // Skip if data already exists
         if (partRepository.count() > 0) {
             log.info("✅ Database already initialized - skipping seeding");

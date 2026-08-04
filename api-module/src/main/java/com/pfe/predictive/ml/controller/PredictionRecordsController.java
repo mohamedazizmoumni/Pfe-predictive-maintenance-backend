@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -151,20 +150,9 @@ public class PredictionRecordsController {
         LocalDateTime from = fromDate.atStartOfDay();
         LocalDateTime to = toDate.atTime(LocalTime.MAX);
 
-        List<PredictionRecordDTO> records = predictionRecordRepository
-                .findByMachineIdAndPredictedAtBetween(machineId, from, to)
-                .stream()
-                .map(mapper::toDTO)
-                .collect(Collectors.toList());
-
-        int start = (int) pageable.getOffset();
-        if (start >= records.size()) {
-            return ResponseEntity.ok(new PageImpl<>(List.of(), pageable, records.size()));
-        }
-        int end = Math.min(start + pageable.getPageSize(), records.size());
-        List<PredictionRecordDTO> pageContent = records.subList(start, end);
-        Page<PredictionRecordDTO> page = new PageImpl<>(pageContent, pageable, records.size());
-
+        Page<PredictionRecordDTO> page = predictionRecordRepository
+                .findByMachineIdAndPredictedAtBetween(machineId, from, to, pageable)
+                .map(mapper::toDTO);
 
         return ResponseEntity.ok(page);
     }
@@ -184,19 +172,9 @@ public class PredictionRecordsController {
             @PageableDefault(size = 20, sort = "predictedAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
 
-        List<PredictionRecordDTO> criticalPredictions = predictionRecordRepository
-                .findAllCriticalPredictions()
-                .stream()
-                .map(mapper::toDTO)
-                .collect(Collectors.toList());
-
-        int start = (int) pageable.getOffset();
-        if (start >= criticalPredictions.size()) {
-            return ResponseEntity.ok(new PageImpl<>(List.of(), pageable, criticalPredictions.size()));
-        }
-        int end = Math.min(start + pageable.getPageSize(), criticalPredictions.size());
-        List<PredictionRecordDTO> pageContent = criticalPredictions.subList(start, end);
-        Page<PredictionRecordDTO> page = new PageImpl<>(pageContent, pageable, criticalPredictions.size());
+        Page<PredictionRecordDTO> page = predictionRecordRepository
+                .findAllCriticalPredictions(pageable)
+                .map(mapper::toDTO);
 
         return ResponseEntity.ok(page);
     }

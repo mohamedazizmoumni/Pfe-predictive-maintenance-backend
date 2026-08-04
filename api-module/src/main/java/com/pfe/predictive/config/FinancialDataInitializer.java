@@ -14,6 +14,7 @@ import com.pfe.predictive.maintenancecost.repository.MaintenanceBudgetRepository
 import com.pfe.predictive.maintenancecost.repository.MaintenancePartRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -24,13 +25,16 @@ import java.util.Set;
 /**
  * Financial Data Initializer
  * Seeds sample data for testing the financial system
- * 
+ *
  * Creates:
  * - 3 sample machines with different criticality levels
  * - 5 maintenance parts with varying stock levels
  * - 2 maintenance budgets for different departments
  * - 2 maintenance actions (preventive and corrective)
- * 
+ *
+ * Gated behind SEED_DEMO_DATA (default off) - a fresh production database
+ * should stay empty, not fill up with sample finance data on first boot.
+ *
  * @author Finance Module
  * @version 1.0
  */
@@ -44,8 +48,16 @@ public class FinancialDataInitializer implements CommandLineRunner {
     private final MaintenanceBudgetRepository maintenanceBudgetRepository;
     private final MaintenanceActionRepository maintenanceActionRepository;
 
+    @Value("${app.demo-data.enabled:false}")
+    private boolean demoDataEnabled;
+
     @Override
     public void run(String... args) {
+        if (!demoDataEnabled) {
+            log.info("Demo data seeding disabled (set SEED_DEMO_DATA=true to enable) - skipping financial sample data");
+            return;
+        }
+
         // Skip if data already exists
         if (machineRepository.count() > 0) {
             log.info("Financial data already initialized - skipping");

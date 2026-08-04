@@ -30,8 +30,9 @@ public class Notification {
 
     /**
      * Reference to the machine that triggered the notification.
+     * Null for stock/inventory notifications, which are not machine-specific.
      */
-    @Column(name = "machine_id", nullable = false)
+    @Column(name = "machine_id")
     private Long machineId;
 
     /**

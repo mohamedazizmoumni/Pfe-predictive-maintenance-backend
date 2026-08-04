@@ -5,6 +5,7 @@ import com.pfe.predictive.ml.dto.MLPredictionResponse;
 import com.pfe.predictive.ml.dto.MlPredictionRequest;
 import com.pfe.predictive.ml.dto.MlTelemetryRecord;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -43,13 +44,17 @@ public class MLServiceClient {
     private final String mlServiceUrl;
     
     public MLServiceClient(
-            RestTemplate restTemplate,
+            @Qualifier("mlRestTemplate") RestTemplate restTemplate,
             @Value("${ml.service.url:http://localhost:8000}") String mlServiceUrl) {
         this.restTemplate = restTemplate;
         this.mlServiceUrl = mlServiceUrl;
     }
     
     public MLPredictionResponse getPrediction(Long machineId, MlPredictionRequest request) {
+        return getPrediction(machineId, request, null);
+    }
+
+    public MLPredictionResponse getPrediction(Long machineId, MlPredictionRequest request, Double actualHealth) {
         try {
             MlPredictionRequest sanitizedRequest = sanitizeRequest(request);
             
@@ -72,27 +77,21 @@ public class MLServiceClient {
             
             if (batchResponse != null && batchResponse.getPredictions() != null && !batchResponse.getPredictions().isEmpty()) {
                 MLPredictionResponse prediction = batchResponse.getPredictions().get(0);
-                
-                // Sanitize and clamp all response values
                 MLPredictionResponse sanitizedPrediction = sanitizePredictionResponse(prediction);
-                
                 log.debug("ML prediction received for machine {}: RUL={}, anomaly={}, risk={}",
                     machineId,
                     sanitizedPrediction.getPredictedRUL(),
                     sanitizedPrediction.getAnomalyProbability(),
                     sanitizedPrediction.getRiskLevel());
-                
                 return sanitizedPrediction;
             } else {
                 log.warn("ML service returned empty response for machine {}", machineId);
-                return createFallbackPrediction(machineId, sanitizedRequest);
+                return createFallbackPrediction(machineId, sanitizedRequest, actualHealth);
             }
             
         } catch (Exception e) {
-            log.error("Failed to get ML prediction for machine {}: {}",
-                machineId, e.getMessage());
-            
-            return createFallbackPrediction(machineId, request);
+            log.error("Failed to get ML prediction for machine {}: {}", machineId, e.getMessage());
+            return createFallbackPrediction(machineId, request, actualHealth);
         }
     }
     
@@ -188,13 +187,23 @@ public class MLServiceClient {
     }
     
     private MLPredictionResponse createFallbackPrediction(Long machineId, MlPredictionRequest request) {
+        return createFallbackPrediction(machineId, request, null);
+    }
+
+    private MLPredictionResponse createFallbackPrediction(Long machineId, MlPredictionRequest request, Double actualHealth) {
         MlPredictionRequest sanitizedRequest = sanitizeRequest(request);
         MlTelemetryRecord firstRecord = sanitizedRequest.getTelemetry().get(0);
         List<Double> sensors = firstRecord.getSensors();
 
-        double primarySignal = sensors.isEmpty() ? 0.0d : sensors.get(0);
-        double normalizedSignal = Math.max(0.0d, Math.min(1.0d, primarySignal / 100.0d));
-        Double health = 100.0d - (normalizedSignal * 80.0d);
+        // Use actual machine health if provided; otherwise estimate from sensor[0]
+        double health;
+        if (actualHealth != null && actualHealth >= 0.0 && actualHealth <= 100.0) {
+            health = actualHealth;
+        } else {
+            double primarySignal = sensors.isEmpty() ? 0.0d : sensors.get(0);
+            double normalizedSignal = Math.max(0.0d, Math.min(1.0d, primarySignal / 100.0d));
+            health = 100.0d - (normalizedSignal * 80.0d);
+        }
         Double riskScore = 100.0d - health;
         
         String riskLevel;

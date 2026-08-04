@@ -1,0 +1,20 @@
+# ============================================================================
+# PROD PROFILE — activate explicitly with SPRING_PROFILES_ACTIVE=prod.
+# Quieter logging and no stack-trace leakage. All secrets (JWT_SECRET,
+# DB_PASSWORD, MAIL_PASSWORD, ML_INTERNAL_API_KEY) must be set via real
+# environment variables - see .env.example for the full list.
+# ============================================================================
+logging:
+  level:
+    root: WARN
+    com.pfe.predictive: INFO
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+app:
+  demo-data:
+    enabled: false

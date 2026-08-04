@@ -3,8 +3,11 @@ package com.pfe.predictive.finance.service;
 import com.pfe.predictive.core.entity.finance.ExpenseCategory;
 import com.pfe.predictive.core.entity.finance.ExpenseReport;
 import com.pfe.predictive.core.entity.finance.ExpenseStatus;
+import com.pfe.predictive.core.entity.finance.MaintenanceRapport;
+import com.pfe.predictive.core.entity.finance.RapportStatus;
 import com.pfe.predictive.data.repository.finance.AnnualBudgetRepository;
 import com.pfe.predictive.data.repository.finance.ExpenseReportRepository;
+import com.pfe.predictive.data.repository.finance.MaintenanceRapportRepository;
 import com.pfe.predictive.finance.dto.FinanceDashboardResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +28,7 @@ public class FinanceDashboardService {
 
     private final ExpenseReportRepository expenseRepository;
     private final AnnualBudgetRepository budgetRepository;
+    private final MaintenanceRapportRepository rapportRepository;
 
     public FinanceDashboardResponse getDashboard() {
         int currentYear = LocalDate.now().getYear();
@@ -53,6 +57,17 @@ public class FinanceDashboardService {
                 .map(ExpenseReport::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // Maintenance rapports awaiting this finance manager's own sign-off are
+        // just as much "pending approval" as an expense report — without this
+        // a rapport sitting in the Rapport Approvals queue never showed up here.
+        List<MaintenanceRapport> pendingFinanceRapports =
+                rapportRepository.findByStatusOrderByCreatedDateDesc(RapportStatus.PENDING_FINANCE_APPROVAL);
+
+        pendingCount += pendingFinanceRapports.size();
+        pendingAmount = pendingAmount.add(pendingFinanceRapports.stream()
+                .map(MaintenanceRapport::getTotalCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+
         BigDecimal approvedAmount = allExpenses.stream()
                 .filter(e -> e.getStatus() == ExpenseStatus.APPROVED)
                 .map(ExpenseReport::getAmount)
@@ -69,6 +84,18 @@ public class FinanceDashboardService {
                         e.getCategory().name(),
                         e.getAmount(),
                         BigDecimal::add));
+
+        // Approved rapports never produce an ExpenseReport, so their cost was
+        // invisible here too — attribute it at the same granularity the rapport
+        // itself tracks (parts vs. labor) rather than lumping it all under a
+        // single "Maintenance" bucket, since that's the breakdown a technician
+        // actually itemized on the rapport.
+        List<MaintenanceRapport> approvedRapports =
+                rapportRepository.findByStatusOrderByCreatedDateDesc(RapportStatus.APPROVED);
+        approvedRapports.forEach(r -> {
+            byCategory.merge(ExpenseCategory.PARTS.name(), r.getPartsCost(), BigDecimal::add);
+            byCategory.merge(ExpenseCategory.LABOR.name(), r.getLaborCost(), BigDecimal::add);
+        });
 
         return FinanceDashboardResponse.builder()
                 .currentYear(currentYear)

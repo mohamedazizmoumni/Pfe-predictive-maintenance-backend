@@ -11,6 +11,8 @@ import com.pfe.predictive.inventory.repository.PartRepository;
 import com.pfe.predictive.inventory.repository.ReorderRequestRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,10 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional
 public class ReorderService {
+
+    // getAllReorders() has no client-driven paging yet - cap at a generous
+    // size (most recent first) instead of loading the entire reorder history.
+    private static final int LIST_CAP = 300;
 
     private final ReorderRequestRepository reorderRepository;
     private final PartRepository partRepository;
@@ -40,7 +46,8 @@ public class ReorderService {
 
     @Transactional(readOnly = true)
     public List<ReorderRequestResponse> getAllReorders() {
-        return reorderRepository.findAll()
+        return reorderRepository.findAll(PageRequest.of(0, LIST_CAP, Sort.by(Sort.Direction.DESC, "createdDate")))
+            .getContent()
             .stream()
             .map(reorderMapper::toResponse)
             .toList();
@@ -51,6 +58,11 @@ public class ReorderService {
 
         ReorderRequest reorder = reorderRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Reorder not found: " + id));
+
+        if (reorder.getStatus() != ReorderStatus.REQUESTED) {
+            throw new IllegalStateException(
+                "Reorder request " + id + " cannot be approved/rejected — current status is " + reorder.getStatus());
+        }
 
         if (Boolean.TRUE.equals(request.getApproved())) {
             reorder.setStatus(ReorderStatus.APPROVED);

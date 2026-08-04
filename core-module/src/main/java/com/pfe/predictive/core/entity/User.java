@@ -51,6 +51,14 @@ public class User {
     @Column(columnDefinition = "LONGTEXT")
     private String profilePictureUrl;
 
+    /** True once the user has completed first-login face enrollment. */
+    @Column(nullable = false)
+    private boolean faceEnrolled = false;
+
+    /** When the face was first enrolled; null if not yet enrolled. */
+    @Column
+    private LocalDateTime faceEnrolledAt;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdDate;
@@ -228,5 +236,21 @@ public class User {
 
     public void setProfilePictureUrl(String profilePictureUrl) {
         this.profilePictureUrl = profilePictureUrl;
+    }
+
+    public boolean isFaceEnrolled() {
+        return faceEnrolled;
+    }
+
+    public void setFaceEnrolled(boolean faceEnrolled) {
+        this.faceEnrolled = faceEnrolled;
+    }
+
+    public LocalDateTime getFaceEnrolledAt() {
+        return faceEnrolledAt;
+    }
+
+    public void setFaceEnrolledAt(LocalDateTime faceEnrolledAt) {
+        this.faceEnrolledAt = faceEnrolledAt;
     }
 }

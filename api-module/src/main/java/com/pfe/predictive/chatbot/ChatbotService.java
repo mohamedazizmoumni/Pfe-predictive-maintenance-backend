@@ -2,9 +2,13 @@ package com.pfe.predictive.chatbot;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pfe.predictive.alert.entity.Alert;
 import com.pfe.predictive.alert.entity.AlertStatus;
 import com.pfe.predictive.alert.repository.AlertRepository;
+import com.pfe.predictive.calendar.dto.CalendarEventResponse;
+import com.pfe.predictive.calendar.service.CalendarEventService;
 import com.pfe.predictive.chatbot.dto.ChatbotResponse;
+import com.pfe.predictive.core.entity.Maintenance;
 import com.pfe.predictive.core.entity.MaintenanceStatus;
 import com.pfe.predictive.core.entity.User;
 import com.pfe.predictive.data.repository.MaintenanceRepository;
@@ -21,6 +25,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import java.security.KeyStore;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import java.io.IOException;
 import java.net.URI;
@@ -62,6 +72,7 @@ public class ChatbotService {
     private final PartRepository partRepository;
     private final AlertRepository alertRepository;
     private final MaintenanceRepository maintenanceRepository;
+    private final CalendarEventService calendarEventService;
 
     private static final List<String> KNOWN_ROLES = List.of(
             "SUPER_ADMIN",
@@ -100,7 +111,8 @@ public class ChatbotService {
             MachineRepository machineRepository,
             PartRepository partRepository,
             AlertRepository alertRepository,
-            MaintenanceRepository maintenanceRepository
+            MaintenanceRepository maintenanceRepository,
+            CalendarEventService calendarEventService
     ) {
         this.objectMapper = objectMapper;
         this.authorizationService = authorizationService;
@@ -110,6 +122,7 @@ public class ChatbotService {
         this.partRepository = partRepository;
         this.alertRepository = alertRepository;
         this.maintenanceRepository = maintenanceRepository;
+        this.calendarEventService = calendarEventService;
     }
 
     public ChatbotResponse askQuestion(String question, Authentication authentication) {
@@ -118,6 +131,19 @@ public class ChatbotService {
 
         if (!authorizationService.isAuthorized(roles, question)) {
             return new ChatbotResponse(NOT_AUTHORIZED, false, roleList);
+        }
+
+        // Checked before the generic platform-wide shortcuts below: "my tasks"/
+        // "what's assigned to me" must answer from the CALLER's own data, not
+        // a platform-wide count. Every shortcut past this point is identity-
+        // agnostic — two different users with the same role asking the exact
+        // same generic question get an identical answer, which is fine for
+        // "how many machines exist" but wrong for "how many tasks do I have".
+        if (isPersonalScopeQuestion(question)) {
+            String personalAnswer = buildPersonalDirectAnswer(question, authentication);
+            if (personalAnswer != null) {
+                return new ChatbotResponse(personalAnswer, true, roleList);
+            }
         }
 
         String platformDirectAnswer = buildPlatformDirectAnswer(question);
@@ -236,9 +262,7 @@ public class ChatbotService {
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
 
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(timeoutSeconds))
-                    .build();
+            HttpClient client = buildOutboundHttpsClient();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
@@ -261,6 +285,41 @@ public class ChatbotService {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("OpenAI request was interrupted", e);
         }
+    }
+
+    private static final boolean IS_WINDOWS =
+            System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+
+    /**
+     * On this network, HTTPS calls out to api.openai.com fail the JVM's
+     * default cacerts trust check (PKIX path building failed) even though
+     * curl and the browser reach it fine — a TLS-inspecting proxy/AV in
+     * front of this machine injects a root CA that Windows trusts but the
+     * JDK's bundled trust store does not (the exact Java-side counterpart of
+     * the pip-system-certs fix this project already needed on the Python
+     * side). Loading the OS "Windows-ROOT" store directly sidesteps that
+     * without touching the JVM-wide default trust manager. Falls back to the
+     * JVM default silently on any non-Windows host or load failure.
+     */
+    private HttpClient buildOutboundHttpsClient() {
+        HttpClient.Builder builder = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(timeoutSeconds));
+
+        if (IS_WINDOWS) {
+            try {
+                KeyStore windowsRoot = KeyStore.getInstance("Windows-ROOT");
+                windowsRoot.load(null, null);
+                TrustManagerFactory trustManagerFactory =
+                        TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                trustManagerFactory.init(windowsRoot);
+                SSLContext sslContext = SSLContext.getInstance("TLS");
+                sslContext.init(null, trustManagerFactory.getTrustManagers(), null);
+                builder.sslContext(sslContext);
+            } catch (Exception ignored) {
+                // Fall back to the JVM's bundled cacerts trust store.
+            }
+        }
+
+        return builder.build();
     }
 
     private String callOllama(String question, List<String> roles) {
@@ -433,6 +492,122 @@ public class ChatbotService {
         return "Users with role " + requestedRole + " (" + usernames.size() + "): " + String.join(", ", usernames) + ".";
     }
 
+    private static final List<MaintenanceStatus> ACTIVE_TASK_STATUSES =
+            List.of(MaintenanceStatus.SCHEDULED, MaintenanceStatus.APPROVED, MaintenanceStatus.IN_PROGRESS);
+    private static final DateTimeFormatter EVENT_TIME_FORMAT = DateTimeFormatter.ofPattern("EEE d MMM, HH:mm");
+
+    /** First-person phrasing — "my tasks", "assigned to me", "what do I have", etc. */
+    private boolean isPersonalScopeQuestion(String question) {
+        String q = normalizeText(question);
+        if (q.isBlank()) {
+            return false;
+        }
+        return q.contains(" my ") || q.startsWith("my ") || q.contains(" me ") || q.endsWith(" me")
+                || q.contains(" me?") || q.contains("i have") || q.contains("assigned to me")
+                || q.contains("do i have");
+    }
+
+    /**
+     * Answers "my tasks" / "my alerts" / "my events" (or "what's coming up",
+     * "what's assigned to me") using the CALLING user's own identity —
+     * resolved from the JWT, not from anything the question text supplies —
+     * so one user can never see another's task list by asking about them in
+     * the first person. Returns null (falls through to the generic
+     * platform-wide shortcuts) if the question doesn't match a known
+     * personal-scope intent or the caller can't be resolved to a User row.
+     */
+    private String buildPersonalDirectAnswer(String question, Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            return null;
+        }
+        User caller = userRepository.findByUsername(authentication.getName()).orElse(null);
+        if (caller == null) {
+            return null;
+        }
+
+        String q = normalizeText(question);
+        boolean asksTasks = q.contains("task");
+        boolean asksAlerts = q.contains("alert");
+        boolean asksEvents = q.contains("event") || q.contains("calendar") || q.contains("schedule")
+                || q.contains("coming up") || q.contains("upcoming");
+
+        if (asksTasks) {
+            return myTasksAnswer(caller);
+        }
+        if (asksAlerts) {
+            return myAlertsAnswer(caller);
+        }
+        if (asksEvents) {
+            return myEventsAnswer(caller);
+        }
+        return null;
+    }
+
+    private String myTasksAnswer(User caller) {
+        List<Maintenance> activeTasks = maintenanceRepository
+                .findByAssignedTechnicianIdAndStatusIn(caller.getId(), ACTIVE_TASK_STATUSES);
+
+        if (activeTasks.isEmpty()) {
+            return "You have no active maintenance tasks assigned right now.";
+        }
+
+        List<String> lines = new ArrayList<>();
+        lines.add("You have " + activeTasks.size() + " active task" + (activeTasks.size() == 1 ? "" : "s") + ":");
+        activeTasks.stream().limit(5).forEach(task -> lines.add(String.format(
+                "- [%s/%s] Machine %s: %s",
+                task.getStatus(), task.getPriority(), task.getMachineId(),
+                task.getDescription() == null ? "" : task.getDescription()
+        )));
+        if (activeTasks.size() > 5) {
+            lines.add("...and " + (activeTasks.size() - 5) + " more.");
+        }
+        return String.join("\n", lines);
+    }
+
+    private String myAlertsAnswer(User caller) {
+        List<Alert> myAlerts = alertRepository
+                .findByAssignedTo(caller.getUsername(), PageRequest.of(0, 50))
+                .getContent();
+
+        long open = myAlerts.stream()
+                .filter(a -> a.getStatus() == AlertStatus.NEW || a.getStatus() == AlertStatus.ACKNOWLEDGED
+                        || a.getStatus() == AlertStatus.ESCALATED)
+                .count();
+
+        if (myAlerts.isEmpty()) {
+            return "You have no alerts assigned to you.";
+        }
+
+        List<String> lines = new ArrayList<>();
+        lines.add("You have " + open + " open alert" + (open == 1 ? "" : "s") + " (" + myAlerts.size() + " total assigned):");
+        myAlerts.stream()
+                .filter(a -> a.getStatus() == AlertStatus.NEW || a.getStatus() == AlertStatus.ACKNOWLEDGED
+                        || a.getStatus() == AlertStatus.ESCALATED)
+                .limit(5)
+                .forEach(a -> lines.add(String.format("- [%s/%s] Machine %s: %s", a.getStatus(), a.getSeverity(), a.getMachineId(), a.getTitle())));
+        return String.join("\n", lines);
+    }
+
+    private String myEventsAnswer(User caller) {
+        LocalDateTime now = LocalDateTime.now();
+        List<CalendarEventResponse> upcoming = calendarEventService
+                .getEventsByTechnicianAndDateRange(caller.getUsername(), now, now.plusDays(7));
+
+        if (upcoming.isEmpty()) {
+            return "You have nothing scheduled in the next 7 days.";
+        }
+
+        List<String> lines = new ArrayList<>();
+        lines.add("You have " + upcoming.size() + " event" + (upcoming.size() == 1 ? "" : "s") + " in the next 7 days:");
+        upcoming.stream().limit(5).forEach(e -> lines.add(String.format(
+                "- %s: %s", e.getStartTime().format(EVENT_TIME_FORMAT), e.getTitle()
+        )));
+        if (upcoming.size() > 5) {
+            lines.add("...and " + (upcoming.size() - 5) + " more.");
+        }
+        return String.join("\n", lines);
+    }
+
     private String buildPlatformDirectAnswer(String question) {
         if (question == null || question.isBlank()) {
             return null;
@@ -569,6 +744,24 @@ public class ChatbotService {
             }
 
             return "There are " + partRepository.count() + " inventory items.";
+        }
+
+        // Last resort: "how many technicians/managers/etc are there" names a
+        // role but not the literal word "user" — every more specific branch
+        // above (machines/maintenance/alerts/inventory) had first refusal and
+        // found nothing, so a bare role name here can only mean a headcount.
+        if (requestedRole != null) {
+            long count = userRepository.findAll().stream()
+                    .filter(user -> user != null && user.getRoles() != null)
+                    .filter(user -> user.getRoles().stream().anyMatch(role -> {
+                        if (role == null || role.getName() == null) {
+                            return false;
+                        }
+                        String name = role.getName().toUpperCase(Locale.ROOT);
+                        return name.equals(requestedRole) || name.equals("ROLE_" + requestedRole);
+                    }))
+                    .count();
+            return "There are " + count + " users with role " + requestedRole + ".";
         }
 
         return null;

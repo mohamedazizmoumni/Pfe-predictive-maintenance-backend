@@ -227,6 +227,12 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <mainClass>com.pfe.predictive.PredictiveMaintenanceApplication</mainClass>
+                    <!-- spring-boot:run otherwise forks the app with its working
+                         directory set to this module (api-module/), regardless of
+                         where `mvn` itself was invoked from. .env lives at the repo
+                         root, so without this the app can't find it and JWT_SECRET
+                         (and every other .env value) resolves empty. -->
+                    <workingDirectory>${project.parent.basedir}</workingDirectory>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>

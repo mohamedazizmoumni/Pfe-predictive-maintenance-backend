@@ -34,11 +34,20 @@ public class NlpAnalysisService {
 
         NlpResponseDTO analysisResponse = nlpAnalysisClient.analyze(request);
         NlpAnalysis entity = nlpAnalysisMapper.toEntity(request, analysisResponse);
-        NlpAnalysis saved = nlpAnalysisRepository.save(Objects.requireNonNull(entity, "NLP analysis entity cannot be null"));
+        NlpAnalysis saved = nlpAnalysisRepository.save(
+            Objects.requireNonNull(entity, "NLP analysis entity cannot be null"));
+
+        // Build the response from the saved entity, then re-attach the
+        // conversational fields that Python returned but we don't persist.
         NlpResponseDTO response = nlpAnalysisMapper.toResponse(saved);
+        response.setMessage(analysisResponse.getMessage());
+        response.setIntent(analysisResponse.getIntent());
+        response.setIsQuestion(analysisResponse.getIsQuestion());
+        response.setCleanedText(analysisResponse.getCleanedText());
+        response.setModelVersion(analysisResponse.getModelVersion());
+        response.setProcessingTimeMs(analysisResponse.getProcessingTimeMs());
 
         publishAfterCommit(response);
-
         return response;
     }
 
@@ -52,7 +61,6 @@ public class NlpAnalysisService {
             });
             return;
         }
-
         nlpAnalysisPublisher.publishAnalysis(response);
     }
 

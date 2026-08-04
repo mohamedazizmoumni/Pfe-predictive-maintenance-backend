@@ -23,13 +23,29 @@ public class JwtTokenProvider {
     private final long accessTokenExpiration;
     private final long refreshTokenExpiration;
 
+    private static final String KNOWN_INSECURE_PLACEHOLDER =
+            "your-super-secret-jwt-key-change-this-in-production-at-least-256-bits-long-minimum-32-characters";
+
     public JwtTokenProvider(
-            @Value("${jwt.secret:your-super-secret-jwt-key-change-this-in-production-at-least-256-bits-long-minimum-32-characters}") String jwtSecret,
+            @Value("${jwt.secret:}") String jwtSecret,
             @Value("${jwt.expiration:3600000}") long accessExpiration,      // e.g. 60 minutes
             @Value("${jwt.refresh.expiration:604800000}") long refreshExpiration) { // e.g. 7 days
 
-        if (jwtSecret == null || jwtSecret.length() < 32) {
-            System.err.println("⚠️ WARNING: JWT secret is too short! Use at least 32 characters.");
+        if (jwtSecret == null || jwtSecret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is not set. Refusing to start with no signing key. " +
+                    "Set JWT_SECRET in .env (generate one with: openssl rand -base64 64).");
+        }
+        if (jwtSecret.equals(KNOWN_INSECURE_PLACEHOLDER)) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is set to the publicly-known placeholder value. Refusing to start. " +
+                    "Generate a real secret with: openssl rand -base64 64");
+        }
+        if (jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is too short (" + jwtSecret.getBytes(StandardCharsets.UTF_8).length +
+                    " bytes). HS512 requires at least 32 bytes. " +
+                    "Generate a real secret with: openssl rand -base64 64");
         }
 
         this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));

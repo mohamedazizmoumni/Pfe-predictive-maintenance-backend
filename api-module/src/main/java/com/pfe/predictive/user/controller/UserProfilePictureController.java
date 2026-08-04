@@ -43,7 +43,7 @@ public class UserProfilePictureController {
      * POST /api/v1/users/{username}/profile-picture
      */
     @PostMapping(value = "/{username}/profile-picture", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN') or #username == authentication.name")
     public ResponseEntity<ProfilePictureResponse> uploadProfilePictureByUsername(
             @PathVariable String username,
             @RequestParam("file") MultipartFile file) {
@@ -112,7 +112,7 @@ public class UserProfilePictureController {
      * DELETE /api/v1/users/{username}/profile-picture
      */
     @DeleteMapping("/{username}/profile-picture")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN') or #username == authentication.name")
     public ResponseEntity<ProfilePictureDeleteResponse> deleteProfilePictureByUsername(
             @PathVariable String username) {
         log.info("Deleting profile picture for user: {}", username);

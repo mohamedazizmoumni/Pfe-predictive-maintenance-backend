@@ -4,6 +4,7 @@ import com.pfe.predictive.auth.client.FaceRecognitionClient;
 import com.pfe.predictive.auth.dto.LoginRequest;
 import com.pfe.predictive.auth.dto.LoginResponse;
 import com.pfe.predictive.auth.dto.RegisterRequest;
+import com.pfe.predictive.auth.exception.FaceLoginUnauthorizedException;
 import com.pfe.predictive.config.provider.JwtTokenProvider;
 import com.pfe.predictive.core.entity.Role;
 import com.pfe.predictive.core.entity.User;
@@ -167,6 +168,10 @@ public class AuthService {
             throw new RuntimeException("User not found");
         }
 
+        if (user.isLocked()) {
+            throw new FaceLoginUnauthorizedException("This account has been blocked. Please contact an administrator.");
+        }
+
         String accessToken = jwtTokenProvider.generateAccessToken(
                 user.getUsername(),
                 user.getEmail(),
@@ -187,6 +192,8 @@ public class AuthService {
         response.setFirstName(user.getFirstName());
         response.setLastName(user.getLastName());
         response.setRoles(user.getRoles().stream().map(Role::getName).collect(Collectors.toList()));
+        // Tell the frontend whether this user still needs to enroll their face
+        response.setFaceEnrolled(user.isFaceEnrolled());
 
         return response;
     }
@@ -262,6 +269,11 @@ public class AuthService {
 
     public User getUserByUsername(String username) {
         return userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    public User getUserByEmail(String email) {
+        return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 

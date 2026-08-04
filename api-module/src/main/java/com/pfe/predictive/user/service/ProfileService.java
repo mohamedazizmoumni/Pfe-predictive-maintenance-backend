@@ -1,5 +1,7 @@
 package com.pfe.predictive.user.service;
 
+import com.pfe.predictive.auth.client.FaceRecognitionClient;
+import com.pfe.predictive.auth.exception.FaceNotDetectedException;
 import com.pfe.predictive.core.entity.User;
 import com.pfe.predictive.data.repository.UserRepository;
 import com.pfe.predictive.user.dto.ProfileResponse;
@@ -31,6 +33,7 @@ public class ProfileService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final FaceRecognitionClient faceRecognitionClient;
 
     @Value("${app.profile.picture.max-size:5242880}") // 5MB default
     private long maxFileSize;
@@ -117,8 +120,11 @@ public class ProfileService {
     // ============================================================================
 
     /**
-     * Upload profile picture for user
-     * Validates file type and size, stores as base64 or file path
+     * Upload profile picture for user.
+     * Validates file type and size, stores as base64 in DB, and additionally
+     * enrolls the image as a supplementary face embedding in the ML service.
+     * If the image contains no detectable face the picture is still saved —
+     * a non-fatal warning is logged so the user experience is unaffected.
      */
     public String uploadProfilePicture(Long userId, MultipartFile file) {
         User user = userRepository.findById(userId)
@@ -128,19 +134,45 @@ public class ProfileService {
         validateProfilePicture(file);
 
         try {
-            // Convert to base64 for storage in database
+            // Convert to base64 data-URL and persist to database
             String base64Picture = Base64.getEncoder().encodeToString(file.getBytes());
             String dataUrl = "data:" + file.getContentType() + ";base64," + base64Picture;
 
             user.setProfilePictureUrl(dataUrl);
             userRepository.save(user);
 
-            log.info("Profile picture uploaded for user: {}", userId);
+            log.info("Profile picture saved for user {}", userId);
+
+            // Enroll the new image as an additional face reference in the ML service.
+            // This runs *after* the DB save so a face-detection failure never blocks
+            // the profile-picture upload itself.
+            tryEnrollFaceFromProfilePicture(userId, file);
+
             return dataUrl;
 
         } catch (IOException e) {
             log.error("Error reading file for user {}: {}", userId, e.getMessage());
             throw new RuntimeException("Failed to process image file", e);
+        }
+    }
+
+    /**
+     * Attempts to enroll the uploaded profile picture as an additional face embedding.
+     * Errors are swallowed so that a non-face image (avatar, logo, etc.) never
+     * prevents the profile-picture upload from completing.
+     */
+    private void tryEnrollFaceFromProfilePicture(Long userId, MultipartFile file) {
+        try {
+            faceRecognitionClient.enrollFace(userId, file);
+            log.info("Profile picture also enrolled as face reference for user {}", userId);
+        } catch (FaceNotDetectedException ex) {
+            // Profile photo contains no recognisable face — perfectly fine.
+            log.warn("No face detected in profile picture for user {} – face reference not updated. {}",
+                    userId, ex.getMessage());
+        } catch (Exception ex) {
+            // ML service unavailable, network timeout, etc. — do not fail the upload.
+            log.warn("Could not enroll profile picture as face reference for user {} (non-fatal): {}",
+                    userId, ex.getMessage());
         }
     }
 

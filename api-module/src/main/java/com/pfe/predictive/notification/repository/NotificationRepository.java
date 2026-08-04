@@ -31,6 +31,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findByMachineIdOrderByCreatedAtDesc(Long machineId);
 
     /**
+     * Paginated variant of the above - caps how many rows are pulled per
+     * machine instead of loading its full notification history.
+     */
+    Page<Notification> findByMachineIdOrderByCreatedAtDesc(Long machineId, Pageable pageable);
+
+    /**
      * Find all notifications targeting a specific role, ordered by most recent first.
      * Searches within comma-separated targetRoles field.
      *
@@ -38,6 +44,13 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
      * @return list of notifications targeting the role
      */
     List<Notification> findByTargetRolesContainingOrderByCreatedAtDesc(String role);
+
+    /**
+     * Paginated variant of the above - this table grows with every
+     * HIGH/CRITICAL prediction, so the role-filtered path needs the same cap
+     * the unfiltered path already has.
+     */
+    Page<Notification> findByTargetRolesContainingOrderByCreatedAtDesc(String role, Pageable pageable);
 
     /**
      * Find all notifications with pagination, ordered by most recent first.
@@ -53,4 +66,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
      * @return number of unread notifications
      */
     long countByIsReadFalse();
+
+    /**
+     * Count unread notifications targeting a specific role — the role-scoped
+     * counterpart to findByTargetRolesContainingOrderByCreatedAtDesc. Without
+     * this, the header bell's badge (countByIsReadFalse, global) and its
+     * panel list (role-filtered) could disagree: the badge would show a
+     * nonzero count for a role that has zero notifications actually
+     * addressed to it, making the panel look broken when clicked.
+     */
+    long countByIsReadFalseAndTargetRolesContaining(String role);
 }
