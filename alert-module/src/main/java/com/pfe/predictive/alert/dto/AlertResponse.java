@@ -65,7 +65,9 @@ public class AlertResponse {
         return switch (status) {
             case NEW -> "New (Not Acknowledged)";
             case ACKNOWLEDGED -> "Acknowledged";
+            case IN_PROGRESS -> "In Progress";
             case ESCALATED -> "Escalated";
+            case RESOLVED -> "Resolved";
             case CLOSED -> "Closed";
         };
     }
@@ -74,6 +76,7 @@ public class AlertResponse {
         return switch (severity) {
             case INFO -> "blue";
             case WARNING -> "yellow";
+            case HIGH -> "orange";
             case CRITICAL -> "red";
         };
     }

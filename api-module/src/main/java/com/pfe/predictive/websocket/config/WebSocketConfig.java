@@ -56,5 +56,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws-nlp")
             .setAllowedOriginPatterns("*")
             .withSockJS();
+
+        // Dedicated endpoint for alert real-time subscriptions
+        registry.addEndpoint("/ws-alerts")
+            .setAllowedOriginPatterns("*")
+            .withSockJS();
     }
 }

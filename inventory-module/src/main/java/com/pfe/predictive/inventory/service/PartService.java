@@ -33,6 +33,11 @@ public class PartService {
             throw new IllegalArgumentException("Category not found: " + cat);
         }
 
+        String partNumber = request.getPartNumber();
+        if (partNumber != null && !partNumber.isBlank() && partRepository.existsByPartNumber(partNumber.trim())) {
+            throw new IllegalArgumentException("A part with part number '" + partNumber.trim() + "' already exists");
+        }
+
         Part part = partMapper.toEntity(request);
 
         // Determine current stock (use provided value or default 0)
@@ -108,7 +113,12 @@ public class PartService {
             part.setSupplier(request.getSupplier());
         }
         if (request.getPartNumber() != null) {
-            part.setPartNumber(request.getPartNumber());
+            String newPartNumber = request.getPartNumber().trim();
+            if (!newPartNumber.equals(part.getPartNumber())
+                    && partRepository.existsByPartNumberAndIdNot(newPartNumber, id)) {
+                throw new IllegalArgumentException("A part with part number '" + newPartNumber + "' already exists");
+            }
+            part.setPartNumber(newPartNumber);
         }
         if (request.getUnit() != null) {
             part.setUnit(request.getUnit());
@@ -239,8 +249,11 @@ public class PartService {
         }
         
         try {
-            // Create uploads directory if it doesn't exist
-            java.nio.file.Path uploadDir = java.nio.file.Paths.get("uploads/parts");
+            // Create uploads directory if it doesn't exist.
+            // Must be an absolute path: MultipartFile.transferTo(File) resolves relative
+            // paths against the servlet container's internal temp dir, not the app's
+            // working directory, which caused writes to silently target the wrong folder.
+            java.nio.file.Path uploadDir = java.nio.file.Paths.get("uploads/parts").toAbsolutePath();
             if (!java.nio.file.Files.exists(uploadDir)) {
                 java.nio.file.Files.createDirectories(uploadDir);
             }

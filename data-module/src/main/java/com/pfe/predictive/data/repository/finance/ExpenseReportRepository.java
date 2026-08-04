@@ -3,6 +3,8 @@ package com.pfe.predictive.data.repository.finance;
 import com.pfe.predictive.core.entity.finance.ExpenseCategory;
 import com.pfe.predictive.core.entity.finance.ExpenseReport;
 import com.pfe.predictive.core.entity.finance.ExpenseStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,13 +20,24 @@ public interface ExpenseReportRepository extends JpaRepository<ExpenseReport, Lo
 
     List<ExpenseReport> findBySubmittedBy(String username);
 
+    // Paginated variants - full expense history grows without bound over time.
+    Page<ExpenseReport> findBySubmittedBy(String username, Pageable pageable);
+
     List<ExpenseReport> findByStatusOrderByCreatedDateDesc(ExpenseStatus status);
+
+    Page<ExpenseReport> findByStatusOrderByCreatedDateDesc(ExpenseStatus status, Pageable pageable);
 
     List<ExpenseReport> findAllByOrderByCreatedDateDesc();
 
+    Page<ExpenseReport> findAllByOrderByCreatedDateDesc(Pageable pageable);
+
     List<ExpenseReport> findByCategory(ExpenseCategory category);
 
+    Page<ExpenseReport> findByCategory(ExpenseCategory category, Pageable pageable);
+
     List<ExpenseReport> findByMachineId(Long machineId);
+
+    Page<ExpenseReport> findByMachineId(Long machineId, Pageable pageable);
 
     long countByStatus(ExpenseStatus status);
 

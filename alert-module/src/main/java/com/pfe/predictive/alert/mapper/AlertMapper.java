@@ -290,6 +290,7 @@ public class AlertMapper {
         alert.setClosedDate(LocalDateTime.now());
         alert.setStatus(com.pfe.predictive.alert.entity.AlertStatus.CLOSED);
         alert.setResolutionNotes(request.getResolutionNotes());
+        alert.setIsActive(false);
         return alert;
     }
 

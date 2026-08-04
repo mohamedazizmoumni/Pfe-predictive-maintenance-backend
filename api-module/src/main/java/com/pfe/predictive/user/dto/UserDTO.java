@@ -18,6 +18,8 @@ public class UserDTO {
     private List<String> roles;
     private LocalDateTime createdDate;
     private String profilePictureUrl;
+    private boolean faceEnrolled;
+    private LocalDateTime faceEnrolledAt;
 
     public UserDTO() {}
 
@@ -140,5 +142,21 @@ public class UserDTO {
 
     public void setProfilePictureUrl(String profilePictureUrl) {
         this.profilePictureUrl = profilePictureUrl;
+    }
+
+    public boolean isFaceEnrolled() {
+        return faceEnrolled;
+    }
+
+    public void setFaceEnrolled(boolean faceEnrolled) {
+        this.faceEnrolled = faceEnrolled;
+    }
+
+    public LocalDateTime getFaceEnrolledAt() {
+        return faceEnrolledAt;
+    }
+
+    public void setFaceEnrolledAt(LocalDateTime faceEnrolledAt) {
+        this.faceEnrolledAt = faceEnrolledAt;
     }
 }

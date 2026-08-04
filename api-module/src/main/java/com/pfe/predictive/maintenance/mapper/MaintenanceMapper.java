@@ -27,6 +27,7 @@ public final class MaintenanceMapper {
         dto.setApprovedBy(source.getApprovedBy());
         dto.setAssignedTechnicianId(source.getAssignedTechnicianId());
         dto.setNotes(source.getNotes());
+        dto.setRootCause(source.getRootCause());
         return dto;
     }
 }

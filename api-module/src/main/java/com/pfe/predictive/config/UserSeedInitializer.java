@@ -5,6 +5,7 @@ import com.pfe.predictive.data.repository.RoleRepository;
 import com.pfe.predictive.data.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -14,11 +15,14 @@ import java.util.List;
 /**
  * User Seed Initializer
  * Seeds default users for testing and initial setup
- * 
+ *
  * Creates:
  * - Super Admin user (superadmin/superadmin)
  * - Technician user (technician/technician)
- * 
+ *
+ * Gated behind SEED_DEMO_DATA (default off) — these are trivially guessable
+ * credentials and must never be created on an unattended production database.
+ *
  * @author Predictive Maintenance System
  * @version 1.0
  */
@@ -31,8 +35,16 @@ public class UserSeedInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    @Value("${app.demo-data.enabled:false}")
+    private boolean demoDataEnabled;
+
     @Override
     public void run(String... args) {
+        if (!demoDataEnabled) {
+            log.info("Demo data seeding disabled (set SEED_DEMO_DATA=true to enable) - skipping default users");
+            return;
+        }
+
         // Skip if users already exist
         if (userRepository.count() > 0) {
             log.info("Users already initialized - skipping");

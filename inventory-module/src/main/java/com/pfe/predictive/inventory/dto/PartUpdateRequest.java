@@ -38,7 +38,7 @@ public class PartUpdateRequest implements Serializable {
     @JsonAlias({"supplierName"})
     private String supplier;
 
-    @JsonAlias({"stock", "current_stock", "currentStock"})
+    @JsonAlias({"stock", "quantity", "stockQuantity", "stock_quantity", "current_stock", "currentStock"})
     private Integer currentStock;
 
     @JsonAlias({"sku", "part_code"})

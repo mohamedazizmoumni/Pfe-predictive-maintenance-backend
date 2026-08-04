@@ -76,7 +76,8 @@ public class ExpenseReportController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get expense report by ID")
+    @PreAuthorize("hasAnyRole('FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Get expense report by ID (submitters use /mine for their own reports)")
     public ResponseEntity<ExpenseReportResponse> getExpenseById(@PathVariable Long id) {
         log.info("GET /finance/expenses/{}", id);
         return ResponseEntity.ok(expenseService.getExpenseById(id));

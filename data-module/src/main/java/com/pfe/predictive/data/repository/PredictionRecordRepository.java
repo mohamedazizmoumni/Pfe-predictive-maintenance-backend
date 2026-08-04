@@ -28,7 +28,10 @@ public interface PredictionRecordRepository extends JpaRepository<PredictionReco
 
     /**
      * Find predictions for a machine within a time range.
-     * Useful for trend analysis and historical queries.
+     * Used by the /trend endpoint, which aggregates the whole range into
+     * daily averages and so genuinely needs every row - do not paginate this
+     * overload. For a paginated view of the same range, use the Pageable
+     * overload below instead.
      * @param machineId ID of the machine
      * @param fromDate start of time range (inclusive)
      * @param toDate end of time range (inclusive)
@@ -38,6 +41,17 @@ public interface PredictionRecordRepository extends JpaRepository<PredictionReco
         Long machineId,
         LocalDateTime fromDate,
         LocalDateTime toDate
+    );
+
+    /**
+     * Paginated variant of the above - for endpoints that show a page of
+     * records in a date range rather than aggregating the whole range.
+     */
+    Page<PredictionRecord> findByMachineIdAndPredictedAtBetween(
+        Long machineId,
+        LocalDateTime fromDate,
+        LocalDateTime toDate,
+        Pageable pageable
     );
 
     /**
@@ -73,6 +87,13 @@ public interface PredictionRecordRepository extends JpaRepository<PredictionReco
      */
     @Query("SELECT p FROM PredictionRecord p WHERE p.riskLevel = 'CRITICAL' ORDER BY p.predictedAt DESC")
     List<PredictionRecord> findAllCriticalPredictions();
+
+    /**
+     * Paginated variant of the above - fetches only the requested page from
+     * the database instead of loading every critical prediction into memory.
+     */
+    @Query("SELECT p FROM PredictionRecord p WHERE p.riskLevel = 'CRITICAL' ORDER BY p.predictedAt DESC")
+    Page<PredictionRecord> findAllCriticalPredictions(Pageable pageable);
 
     /**
      * Calculate average RUL across entire fleet.

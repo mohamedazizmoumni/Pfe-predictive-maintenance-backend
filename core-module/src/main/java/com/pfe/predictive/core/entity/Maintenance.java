@@ -60,6 +60,10 @@ public class Maintenance {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    /** Set by the Manager after a CORRECTIVE/EMERGENCY repair, feeds failure/reliability analytics (see ReliabilityService). */
+    @Column(name = "root_cause", columnDefinition = "TEXT")
+    private String rootCause;
+
     @CreationTimestamp
     @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdDate;
@@ -187,6 +191,14 @@ public class Maintenance {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getRootCause() {
+        return rootCause;
+    }
+
+    public void setRootCause(String rootCause) {
+        this.rootCause = rootCause;
     }
 
     public LocalDateTime getCreatedDate() {

@@ -19,6 +19,8 @@ public interface ReorderRequestRepository extends JpaRepository<ReorderRequest, 
 
     List<ReorderRequest> findByPartId(Long partId);
 
+    boolean existsByPartIdAndStatus(Long partId, ReorderStatus status);
+
     @Query("SELECT r FROM ReorderRequest r WHERE r.status = 'REQUESTED' ORDER BY r.createdDate ASC")
     List<ReorderRequest> findPendingReorders();
 }

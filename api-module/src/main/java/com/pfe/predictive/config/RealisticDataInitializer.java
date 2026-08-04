@@ -4,6 +4,7 @@ import com.pfe.predictive.core.entity.*;
 import com.pfe.predictive.data.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -13,7 +14,10 @@ import java.util.*;
 
 /**
  * Realistic Data Initializer
- * Seeds the database with comprehensive realistic data for testing and demonstration
+ * Seeds the database with comprehensive realistic data for testing and demonstration.
+ *
+ * Gated behind SEED_DEMO_DATA (default off) so an empty production database
+ * never gets a predictable admin/admin-password account seeded into it.
  */
 @Slf4j
 @Component
@@ -28,8 +32,16 @@ public class RealisticDataInitializer implements CommandLineRunner {
     private final SensorTelemetryRepository sensorTelemetryRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    @Value("${app.demo-data.enabled:false}")
+    private boolean demoDataEnabled;
+
     @Override
     public void run(String... args) {
+        if (!demoDataEnabled) {
+            log.info("⏭️ Demo data seeding disabled (set SEED_DEMO_DATA=true to enable) - skipping");
+            return;
+        }
+
         // Skip if machines already exist (indicates data is already seeded)
         if (machineRepository.count() > 0) {
             log.info("✅ Realistic data already initialized - skipping");

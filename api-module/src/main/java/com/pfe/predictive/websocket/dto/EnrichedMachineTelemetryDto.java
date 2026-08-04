@@ -88,5 +88,6 @@ public class EnrichedMachineTelemetryDto {
     // ==================== METADATA ====================
     
     private LocalDateTime timestamp;
-    private Boolean mlPredictionAvailable;    // Was ML service available?
+    private Boolean mlPredictionAvailable;    // Was the trained model reachable, or is this a rule-based fallback?
+    private String modelVersion;              // e.g. "v2.1" for a real model, "fallback-1.0" when the ML service was unreachable
 }

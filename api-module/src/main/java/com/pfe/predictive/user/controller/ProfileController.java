@@ -116,16 +116,21 @@ public class ProfileController {
     /**
      * Upload profile picture for current user
      * POST /api/v1/profile/picture
+     * Accepts field name "file", "image", or "photo" for flexibility.
      */
     @PostMapping(value = "/picture", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ProfilePictureResponse> uploadProfilePicture(
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam(value = "file",  required = false) MultipartFile file,
+            @RequestParam(value = "image", required = false) MultipartFile image,
+            @RequestParam(value = "photo", required = false) MultipartFile photo) {
         Long userId = getCurrentUserId();
         log.info("Uploading profile picture for user: {}", userId);
 
+        MultipartFile upload = file != null ? file : (image != null ? image : photo);
+
         try {
-            String pictureUrl = profileService.uploadProfilePicture(userId, file);
+            String pictureUrl = profileService.uploadProfilePicture(userId, upload);
 
             ProfilePictureResponse response = ProfilePictureResponse.builder()
                 .userId(userId)
@@ -138,10 +143,18 @@ public class ProfileController {
 
         } catch (IllegalArgumentException e) {
             log.warn("Profile picture validation error for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(
+                ProfilePictureResponse.builder()
+                    .userId(userId)
+                    .message(e.getMessage())
+                    .build());
         } catch (Exception e) {
             log.error("Error uploading profile picture for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                ProfilePictureResponse.builder()
+                    .userId(userId)
+                    .message("Failed to upload profile picture: " + e.getMessage())
+                    .build());
         }
     }
 
@@ -153,11 +166,15 @@ public class ProfileController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN') or #userId == authentication.principal.id")
     public ResponseEntity<ProfilePictureResponse> uploadUserProfilePicture(
             @PathVariable Long userId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam(value = "file",  required = false) MultipartFile file,
+            @RequestParam(value = "image", required = false) MultipartFile image,
+            @RequestParam(value = "photo", required = false) MultipartFile photo) {
         log.info("Uploading profile picture for user: {}", userId);
 
+        MultipartFile upload = file != null ? file : (image != null ? image : photo);
+
         try {
-            String pictureUrl = profileService.uploadProfilePicture(userId, file);
+            String pictureUrl = profileService.uploadProfilePicture(userId, upload);
 
             ProfilePictureResponse response = ProfilePictureResponse.builder()
                 .userId(userId)
@@ -170,10 +187,18 @@ public class ProfileController {
 
         } catch (IllegalArgumentException e) {
             log.warn("Profile picture validation error for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(
+                ProfilePictureResponse.builder()
+                    .userId(userId)
+                    .message(e.getMessage())
+                    .build());
         } catch (Exception e) {
             log.error("Error uploading profile picture for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                ProfilePictureResponse.builder()
+                    .userId(userId)
+                    .message("Failed to upload profile picture: " + e.getMessage())
+                    .build());
         }
     }
 
@@ -296,28 +321,18 @@ public class ProfileController {
     // ============================================================================
 
     /**
-     * Get current authenticated user ID
+     * Get current authenticated user ID.
+     * The JWT filter sets the Authentication principal to the plain username
+     * String (not a UserDetails), so resolve via Authentication#getName().
      */
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.UserDetails) {
-            return extractUserIdFromAuthentication(authentication);
+        if (authentication == null) {
+            throw new IllegalStateException("User not authenticated");
         }
-        throw new IllegalStateException("User not authenticated");
-    }
-
-    /**
-     * Extract user ID from authentication
-     * Looks up the user by username to get their ID
-     */
-    private Long extractUserIdFromAuthentication(Authentication authentication) {
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
-            String username = ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
-            return userRepository.findByUsername(username)
-                .map(com.pfe.predictive.core.entity.User::getId)
-                .orElseThrow(() -> new IllegalStateException("User not found: " + username));
-        }
-        throw new IllegalStateException("Cannot extract user ID from authentication");
+        String username = authentication.getName();
+        return userRepository.findByUsername(username)
+            .map(com.pfe.predictive.core.entity.User::getId)
+            .orElseThrow(() -> new IllegalStateException("User not found: " + username));
     }
 }

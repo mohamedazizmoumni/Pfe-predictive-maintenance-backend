@@ -9,18 +9,23 @@ import com.pfe.predictive.alert.entity.AlertStatus;
 import com.pfe.predictive.alert.mapper.AlertMapper;
 import com.pfe.predictive.alert.repository.AlertRepository;
 import com.pfe.predictive.alert.service.AlertNotificationProperties;
+import com.pfe.predictive.audit.service.AuditEventService;
+import com.pfe.predictive.common.service.AlertEmailContent;
 import com.pfe.predictive.common.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.pfe.predictive.alert.entity.AlertSeverity;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * AlertService - Business logic for alert write operations.
@@ -64,6 +69,7 @@ public class AlertService {
     private final EmailService emailService;
     private final AlertNotificationProperties alertNotificationProperties;
     private final SimpMessagingTemplate messagingTemplate;
+    private final AuditEventService auditEventService;
 
     // ============================================================================
     // CREATE OPERATIONS
@@ -84,23 +90,117 @@ public class AlertService {
 
         log.info("Alert created successfully with ID: {}", saved.getId());
 
-        publishRealtimeAlert(saved);
+        publishRealtimeAlert(saved, "CREATED", AlertBroadcastContext.empty());
 
         // Send notification emails to managers only.
         if (alertNotificationProperties.isEnabled()) {
-            emailService.notifyManagersOfMachineAlert(
-                    saved.getMachineId(),
-                    saved.getSeverity() == null ? "UNKNOWN" : saved.getSeverity().name(),
-                    saved.getMessage(),
-                    saved.getCreatedDate(),
-                    saved.getRecommendations()
-            );
+            emailService.sendAlertNotification(buildEmailContent(saved, null));
             log.info("Alert email dispatch queued for alert {}", saved.getId());
         }
         return saved;
     }
 
-    private void publishRealtimeAlert(Alert alert) {
+    // ============================================================================
+    // INCIDENT-BASED ALERTING (state-based, replaces time-based cooldown)
+    // ============================================================================
+
+    /**
+     * Find the currently open incident for a machine+issue combination, if any.
+     */
+    public Optional<Alert> findActiveAlert(Long machineId, String issueType) {
+        return alertRepository.findByMachineIdAndIssueTypeAndIsActiveTrue(machineId, issueType);
+    }
+
+    /**
+     * Open a new incident: creates the alert, marks it active, sends the email
+     * notification, and broadcasts a CREATED event. Only call this when
+     * {@link #findActiveAlert} returned empty for this machine+issueType.
+     */
+    public Alert openIncident(CreateAlertRequest request, String issueType, String createdBy, AlertBroadcastContext context) {
+        log.info("Opening new incident for machine {} ({}): {}", request.getMachineId(), issueType, request.getTitle());
+
+        Alert alert = alertMapper.toEntity(request, createdBy);
+        alert.setIssueType(issueType);
+        alert.setIsActive(true);
+        applySnapshot(alert, context);
+
+        Alert saved;
+        try {
+            saved = alertRepository.save(alert);
+        } catch (DataIntegrityViolationException ex) {
+            // Lost the race to open this incident: the DB's partial unique
+            // index (idx_alerts_active_incident_unique) rejected a second
+            // active row for this machine+issueType. Another concurrent
+            // caller (the 2s scheduler tick vs. a manual trigger, or two
+            // overlapping ticks) already won — return that one instead of
+            // duplicating the row, the broadcast, and the email.
+            log.info("Incident already active for machine {} ({}) — lost race, reusing existing incident",
+                    request.getMachineId(), issueType);
+            return alertRepository.findByMachineIdAndIssueTypeAndIsActiveTrue(request.getMachineId(), issueType)
+                    .orElseThrow(() -> ex);
+        }
+
+        if (alertNotificationProperties.isEnabled()) {
+            emailService.sendAlertNotification(buildEmailContent(saved, context));
+            saved.setLastEmailSentAt(LocalDateTime.now());
+            saved = alertRepository.save(saved);
+            log.info("Incident email dispatched for alert {}", saved.getId());
+        }
+
+        publishRealtimeAlert(saved, "CREATED", context);
+        return saved;
+    }
+
+    /**
+     * Update the severity/title/message of an already-open incident (e.g. it
+     * worsened from WARNING to CRITICAL). Broadcasts an UPDATED event — no email.
+     */
+    public Alert updateIncidentSeverity(Alert alert, AlertSeverity newSeverity, String newTitle, String newMessage, String newRecommendedAction, AlertBroadcastContext context) {
+        alert.setSeverity(newSeverity);
+        alert.setTitle(newTitle);
+        alert.setMessage(newMessage);
+        alert.setRecommendations(newRecommendedAction);
+        applySnapshot(alert, context);
+        Alert saved = alertRepository.save(alert);
+
+        log.info("Incident {} severity updated to {}", saved.getId(), newSeverity);
+        publishRealtimeAlert(saved, "UPDATED", context);
+        return saved;
+    }
+
+    private void applySnapshot(Alert alert, AlertBroadcastContext context) {
+        if (context == null) {
+            return;
+        }
+        alert.setHealthScore(context.health());
+        alert.setPredictedRUL(context.predictedRUL());
+        alert.setAnomalyProbability(context.anomalyProbability());
+        alert.setRiskLevel(context.riskLevel());
+        alert.setFailureProbability(context.failureProbability());
+        alert.setAnomalyType(context.anomalyType());
+        alert.setPredictedFailureType(context.predictedFailureType());
+    }
+
+    private AlertEmailContent buildEmailContent(Alert alert, AlertBroadcastContext context) {
+        return new AlertEmailContent(
+                alert.getMachineId(),
+                context != null ? context.machineName() : null,
+                alert.getSeverity() == null ? "UNKNOWN" : alert.getSeverity().name(),
+                alert.getTitle(),
+                alert.getMessage(),
+                alert.getRecommendations(),
+                alert.getHealthScore(),
+                alert.getPredictedRUL(),
+                alert.getAnomalyProbability(),
+                alert.getRiskLevel(),
+                alert.getFailureProbability(),
+                alert.getAnomalyType(),
+                alert.getPredictedFailureType(),
+                alert.getCreatedDate()
+        );
+    }
+
+    private void publishRealtimeAlert(Alert alert, String eventType, AlertBroadcastContext context) {
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("alertId", alert.getId());
@@ -109,8 +209,19 @@ public class AlertService {
             payload.put("description", alert.getMessage());
             payload.put("severity", alert.getSeverity() == null ? "UNKNOWN" : alert.getSeverity().name());
             payload.put("status", alert.getStatus() == null ? "UNKNOWN" : alert.getStatus().name());
-            payload.put("timestamp", alert.getCreatedDate() == null ? LocalDateTime.now() : alert.getCreatedDate());
+            payload.put("eventType", eventType);
+            payload.put("timestamp", LocalDateTime.now());
             payload.put("recommendedAction", alert.getRecommendations());
+
+            if (context != null) {
+                payload.put("machineName", context.machineName());
+                payload.put("health", context.health());
+                payload.put("anomalyProbability", context.anomalyProbability());
+                payload.put("riskLevel", context.riskLevel());
+                payload.put("predictedRUL", context.predictedRUL());
+                payload.put("failureProbability", context.failureProbability());
+                payload.put("anomalyType", context.anomalyType());
+            }
 
             messagingTemplate.convertAndSend("/topic/alerts", payload);
         } catch (Exception ex) {
@@ -186,6 +297,8 @@ public class AlertService {
         Alert updated = alertMapper.mapEscalation(alert, escalatedBy, request);
         Alert saved = alertRepository.save(updated);
 
+        auditEventService.record(escalatedBy, "ALERT_ESCALATED", "Alert", saved.getId(),
+                "severity=" + saved.getSeverity());
         log.info("Alert {} escalated by {} at {}", alertId, escalatedBy, saved.getEscalatedDate());
         return saved;
     }
@@ -211,10 +324,27 @@ public class AlertService {
             throw new IllegalStateException("Alert is already closed");
         }
 
+        boolean wasTrackedIncident = alert.getIssueType() != null;
+
         // Map closure data to entity
         Alert updated = alertMapper.mapClosure(alert, closedBy, request);
         Alert saved = alertRepository.save(updated);
 
+        // Second and last email in the incident's lifecycle: one on open
+        // (openIncident), one here on close — never on the noisy severity
+        // dips/updates in between (see updateIncidentSeverity, which sends
+        // none). Scoped to issueType-tracked incidents (i.e. sensor-anomaly
+        // alerts opened by the ML polling loop) so a manually created,
+        // one-off alert closure doesn't also fire a "resolved" email it
+        // never had an "opened" email to pair with. closeAlert() already
+        // rejects an already-CLOSED alert above, so this can only run once.
+        if (wasTrackedIncident && alertNotificationProperties.isEnabled()) {
+            emailService.sendAlertResolvedNotification(
+                    buildEmailContent(saved, null), saved.getResolutionNotes(), closedBy);
+            log.info("Resolution email dispatched for alert {}", saved.getId());
+        }
+
+        auditEventService.record(closedBy, "ALERT_CLOSED", "Alert", saved.getId(), null);
         log.info("Alert {} closed by {} at {}", alertId, closedBy, saved.getClosedDate());
         return saved;
     }
@@ -251,11 +381,10 @@ public class AlertService {
      */
     @Transactional
     public long markMultipleAsViewed(java.util.List<Long> alertIds, String viewedBy) {
-        long count = 0;
-        for (Long alertId : alertIds) {
-            markAsViewed(alertId);
-            count++;
+        if (alertIds == null || alertIds.isEmpty()) {
+            return 0;
         }
+        long count = alertRepository.markAsViewedBulk(alertIds);
         log.info("Marked {} alerts as viewed by {}", count, viewedBy);
         return count;
     }
@@ -268,6 +397,7 @@ public class AlertService {
     public void deleteAlert(Long alertId) {
         log.warn("Deleting alert {}", alertId);
         alertRepository.deleteById(alertId);
+        auditEventService.record("ALERT_DELETED", "Alert", alertId, null);
     }
 
     /**

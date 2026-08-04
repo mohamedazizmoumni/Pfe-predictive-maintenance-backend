@@ -10,6 +10,7 @@ import com.pfe.predictive.data.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,10 @@ public class TaskService {
             DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a");
 
     private static final String DEFAULT_FRONTEND_URL = "http://localhost:4200";
+
+    // These list endpoints have no client-driven paging yet - cap at a
+    // generous size instead of loading every row ever created.
+    private static final int LIST_CAP = 200;
 
     private final TaskRepository taskRepository;
     private final EmailService emailService;
@@ -146,7 +151,7 @@ public class TaskService {
 
         log.debug("Fetching all tasks");
 
-        return taskRepository.findAll();
+        return taskRepository.findAll(PageRequest.of(0, LIST_CAP)).getContent();
     }
 
     /**
@@ -625,7 +630,7 @@ public class TaskService {
 
         log.debug("Fetching tasks for assigned user: {}", assignedTo);
 
-        return taskRepository.findByAssignedTo(assignedTo);
+        return taskRepository.findByAssignedTo(assignedTo, PageRequest.of(0, LIST_CAP)).getContent();
     }
 
     /**
@@ -636,7 +641,7 @@ public class TaskService {
 
         log.debug("Fetching tasks with status: {}", status);
 
-        return taskRepository.findByStatus(status);
+        return taskRepository.findByStatus(status, PageRequest.of(0, LIST_CAP)).getContent();
     }
 
     /**
@@ -647,7 +652,7 @@ public class TaskService {
 
         log.debug("Fetching tasks for machine: {}", machineId);
 
-        return taskRepository.findByMachineId(machineId);
+        return taskRepository.findByMachineId(machineId, PageRequest.of(0, LIST_CAP)).getContent();
     }
 
     /**

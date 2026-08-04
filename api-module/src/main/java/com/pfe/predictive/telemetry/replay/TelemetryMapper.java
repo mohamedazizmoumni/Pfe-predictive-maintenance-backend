@@ -74,15 +74,15 @@ public class TelemetryMapper {
                 .lubricationLevel(deriveLubricationLevel(status))
                 .fatigueIndex(deriveFatigueIndex(status))
                 .efficiencyScore(deriveEfficiencyScore(status))
-                .temperature(row.sensor(1))
+                .temperature(deriveTemperature(status))
                 .vibration(row.sensor(2))
                 .powerConsumption(row.sensor(3))
                 .pressure(row.sensor(4))
-                .acousticEmission(row.sensor(5))
-                .current(row.sensor(6))
+                .acousticEmission(row.sensor(15))
+                .current(row.sensor(17))
                 .voltage(row.sensor(7))
-                .rotationSpeed(row.sensor(18))
-                .efficiency(row.sensor(19))
+                .rotationSpeed(row.sensor(9))
+                .efficiency(row.sensor(12))
                 .ambientTemperature(row.setting1())
                 .loadFactor(row.setting2())
                 .operatingSpeed(row.setting3())
@@ -112,15 +112,15 @@ public class TelemetryMapper {
                 .lubricationLevel(deriveLubricationLevel(status))
                 .fatigueIndex(deriveFatigueIndex(status))
                 .efficiencyScore(deriveEfficiencyScore(status))
-                .temperature(row.sensor(1))
+                .temperature(deriveTemperature(status))
                 .vibration(row.sensor(2))
                 .powerConsumption(row.sensor(3))
                 .pressure(row.sensor(4))
-                .acousticEmission(row.sensor(5))
-                .current(row.sensor(6))
+                .acousticEmission(row.sensor(15))
+                .current(row.sensor(17))
                 .voltage(row.sensor(7))
-                .rotationSpeed(row.sensor(18))
-                .efficiency(row.sensor(19))
+                .rotationSpeed(row.sensor(9))
+                .efficiency(row.sensor(12))
                 .ambientTemperature(row.setting1())
                 .loadFactor(row.setting2())
                 .operatingSpeed(row.setting3())
@@ -138,8 +138,19 @@ public class TelemetryMapper {
                 .severity(prediction.getSeverity())
                 .requiresImmediateAction(prediction.getRequiresImmediateAction())
                 .timestamp(LocalDateTime.now())
-                .mlPredictionAvailable(true)
+                .mlPredictionAvailable(isRealPrediction(prediction))
+                .modelVersion(prediction.getModelVersion())
                 .build();
+    }
+
+    /**
+     * A prediction is "real" (trained-model output) unless MLServiceClient had to
+     * substitute its rule-based fallback, which it always tags modelVersion="fallback-*".
+     * Callers use this to disclose fallback state instead of presenting it as a live prediction.
+     */
+    private boolean isRealPrediction(MLPredictionResponse prediction) {
+        String modelVersion = prediction.getModelVersion();
+        return modelVersion != null && !modelVersion.startsWith("fallback");
     }
 
     public MlPredictionRequest toMlPredictionRequest(Machine machine, DatasetTelemetryRow row, MachineTrajectoryStatus status) {
@@ -213,11 +224,11 @@ public class TelemetryMapper {
                 .health(status.health())
                 .riskScore(status.riskScore())
                 .remainingUsefulLife(status.remainingUsefulLife())
-                .temperature(row.sensor(1))
+                .temperature(deriveTemperature(status))
                 .vibration(row.sensor(2))
                 .powerConsumption(row.sensor(3))
                 .pressure(row.sensor(4))
-                .current(row.sensor(6))
+                .current(row.sensor(17))
                 .voltage(row.sensor(7))
                 .bearingWear(deriveBearingWear(status))
                 .thermalStress(deriveThermalStress(status))
@@ -237,7 +248,8 @@ public class TelemetryMapper {
                 .anomalyType(prediction.getAnomalyType())
                 .severity(prediction.getSeverity())
                 .requiresImmediateAction(prediction.getRequiresImmediateAction())
-                .mlPredictionAvailable(true)
+                .mlPredictionAvailable(isRealPrediction(prediction))
+                .modelVersion(prediction.getModelVersion())
                 .build();
     }
 
@@ -272,6 +284,20 @@ public class TelemetryMapper {
 
     private double deriveEfficiencyScore(MachineTrajectoryStatus status) {
         return clamp(100.0d - (status.progress() * 75.0d));
+    }
+
+    /**
+     * Synthetic operating temperature in °C, driven by degradation progress.
+     * NASA C-MAPSS's raw sensor columns are turbofan gas-path measurements
+     * (Rankine-scale core/turbine temps, RPM, psia) with no realistic
+     * mapping onto a factory machine's temperature gauge — sensor(8) in
+     * particular is physical fan speed (~2388-2390), not a temperature at
+     * all, which is why it was rendering as an absurd "2388°C". This
+     * produces a believable 32-90°C range instead, consistent with the
+     * other derive*() synthetic metrics below.
+     */
+    private double deriveTemperature(MachineTrajectoryStatus status) {
+        return clamp(32.0d + status.progress() * 58.0d);
     }
 
     private double clamp(double value) {

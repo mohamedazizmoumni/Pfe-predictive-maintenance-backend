@@ -44,7 +44,7 @@ public class CostComparisonController {
      * @return Cost comparison report
      */
     @PostMapping("/compare")
-    @PreAuthorize("hasAnyRole('FINANCE_MANAGER', 'MAINTENANCE_MANAGER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('FINANCE_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Compare maintenance costs", 
                description = "Compare preventive vs corrective maintenance costs for a specific action")
     public ResponseEntity<CostComparisonResponse> compareCosts(@Valid @RequestBody CostComparisonRequest request) {
@@ -76,7 +76,7 @@ public class CostComparisonController {
      * @return Cost comparison report
      */
     @GetMapping("/compare/machine/{machineId}")
-    @PreAuthorize("hasAnyRole('FINANCE_MANAGER', 'MAINTENANCE_MANAGER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('FINANCE_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get cost comparison for machine", 
                description = "Get cost comparison for a machine's next planned maintenance action")
     public ResponseEntity<CostComparisonResponse> compareCostsForMachine(

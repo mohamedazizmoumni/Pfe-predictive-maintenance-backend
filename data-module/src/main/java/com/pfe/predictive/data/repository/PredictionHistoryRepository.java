@@ -26,6 +26,11 @@ public interface PredictionHistoryRepository extends JpaRepository<PredictionHis
      * Find recent predictions for a machine.
      */
     List<PredictionHistory> findTop10ByMachineIdOrderByTimestampDesc(Long machineId);
+
+    /**
+     * Most recent prediction for a machine — feeds the explainability endpoint.
+     */
+    java.util.Optional<PredictionHistory> findFirstByMachineIdOrderByTimestampDesc(Long machineId);
     
     /**
      * Find predictions within a time range.

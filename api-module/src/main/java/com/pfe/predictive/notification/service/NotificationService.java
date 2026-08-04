@@ -45,12 +45,12 @@ public class NotificationService {
         String body;
 
         if (riskLevel == RiskLevel.HIGH) {
-            targetRoles = "MANAGER,ADMIN";
+            targetRoles = "MANAGER,ADMIN,SUPER_ADMIN";
             title = "⚠️ HIGH RISK: Machine " + machineId + " — schedule maintenance soon";
-            body = "Machine " + machineId + ": RUL = " + String.format("%.1f", rulValue) 
+            body = "Machine " + machineId + ": RUL = " + String.format("%.1f", rulValue)
                    + " hours | Risk: HIGH | Record ID: " + predictionRecordId;
         } else { // CRITICAL
-            targetRoles = "TECHNICIAN,MANAGER,ADMIN";
+            targetRoles = "TECHNICIAN,MANAGER,ADMIN,SUPER_ADMIN";
             title = "🚨 CRITICAL: Machine " + machineId + " requires immediate attention";
             body = "Machine " + machineId + ": RUL = " + String.format("%.1f", rulValue) 
                    + " hours | Risk: CRITICAL | Record ID: " + predictionRecordId;

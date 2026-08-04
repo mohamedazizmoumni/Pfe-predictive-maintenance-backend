@@ -19,6 +19,8 @@ public interface StockOrderRepository extends JpaRepository<StockOrder, Long> {
 
     List<StockOrder> findByOrderedBy(String orderedBy);
 
+    List<StockOrder> findBySupplierId(Long supplierId);
+
     @Query("SELECT so FROM StockOrder so WHERE so.status IN ('PENDING', 'SHIPPED') ORDER BY so.orderedDate ASC")
     List<StockOrder> findOpenOrders();
 }

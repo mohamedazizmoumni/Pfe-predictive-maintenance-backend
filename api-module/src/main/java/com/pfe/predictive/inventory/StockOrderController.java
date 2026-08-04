@@ -72,6 +72,19 @@ public class StockOrderController {
     }
     
     /**
+     * Mark order as shipped
+     */
+    @PutMapping("/{id}/ship")
+    @PreAuthorize("hasAnyRole('STOCK_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Mark order as shipped", description = "Transition a pending stock order to shipped")
+    public ResponseEntity<StockOrderResponse> markOrderShipped(@PathVariable Long id) {
+        log.info("Marking stock order {} as shipped", id);
+
+        StockOrderResponse response = stockOrderService.markOrderShipped(id);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Mark order as delivered
      */
     @PutMapping("/{id}/deliver")

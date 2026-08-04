@@ -7,12 +7,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * AlertRepository - Spring Data JPA repository for Alert entity.
@@ -112,6 +114,17 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
     Page<Alert> findCriticalAlerts(@Param("severity") AlertSeverity severity, Pageable pageable);
 
     /**
+     * Bulk-mark alerts as viewed in a single UPDATE statement, instead of a
+     * findById + save round trip per alert (was 2xN queries for N alerts).
+     *
+     * @param ids the alert IDs to mark as viewed
+     * @return number of rows updated
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Alert a SET a.viewed = true WHERE a.id IN :ids")
+    int markAsViewedBulk(@Param("ids") List<Long> ids);
+
+    /**
      * Find alerts created within a date range.
      *
      * @param startDate the start date (inclusive)
@@ -197,4 +210,14 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
      * @return paginated recently closed alerts
      */
     Page<Alert> findByClosedDateAfter(LocalDateTime closedDate, Pageable pageable);
+
+    /**
+     * Find the currently open incident for a machine+issue combination, if any.
+     * Backs the state-based alert dedup check (replaces the old time-based cooldown).
+     *
+     * @param machineId the machine ID
+     * @param issueType the issue/incident type
+     * @return the active alert, if one is currently open
+     */
+    Optional<Alert> findByMachineIdAndIssueTypeAndIsActiveTrue(Long machineId, String issueType);
 }

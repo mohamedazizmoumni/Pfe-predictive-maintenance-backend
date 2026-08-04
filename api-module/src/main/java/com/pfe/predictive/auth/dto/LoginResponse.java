@@ -12,10 +12,12 @@ public class LoginResponse implements Serializable {
     private String firstName;
     private String lastName;
     private List<String> roles;
+    /** False on first login for admin-created accounts — frontend should prompt enrollment. */
+    private boolean faceEnrolled;
 
     public LoginResponse() {}
 
-    public LoginResponse(String token, String refreshToken, Long id, String username, 
+    public LoginResponse(String token, String refreshToken, Long id, String username,
                         String email, String firstName, String lastName, List<String> roles) {
         this.token = token;
         this.refreshToken = refreshToken;
@@ -43,4 +45,6 @@ public class LoginResponse implements Serializable {
     public void setLastName(String lastName) { this.lastName = lastName; }
     public List<String> getRoles() { return roles; }
     public void setRoles(List<String> roles) { this.roles = roles; }
+    public boolean isFaceEnrolled() { return faceEnrolled; }
+    public void setFaceEnrolled(boolean faceEnrolled) { this.faceEnrolled = faceEnrolled; }
 }

@@ -43,6 +43,11 @@ public class StockOrder {
     @JoinColumn(name = "part_id", nullable = false)
     private Part part;
 
+    /** Nullable — not every order is tied to a formal Supplier record yet (see Supplier). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
+    private Supplier supplier;
+
     @Column(nullable = false)
     private Integer quantity;
 

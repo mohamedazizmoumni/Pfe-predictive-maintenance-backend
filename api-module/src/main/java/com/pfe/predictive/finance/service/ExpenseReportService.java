@@ -1,5 +1,6 @@
 package com.pfe.predictive.finance.service;
 
+import com.pfe.predictive.audit.service.AuditEventService;
 import com.pfe.predictive.core.entity.finance.ExpenseCategory;
 import com.pfe.predictive.core.entity.finance.ExpenseReport;
 import com.pfe.predictive.core.entity.finance.ExpenseStatus;
@@ -13,6 +14,8 @@ import com.pfe.predictive.finance.mapper.ExpenseReportMapper;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,13 @@ public class ExpenseReportService {
     private final ExpenseReportRepository expenseRepository;
     private final ExpenseReportMapper expenseMapper;
     private final AnnualBudgetService budgetService;
+    private final AuditEventService auditEventService;
+
+    // These list endpoints have no client-driven paging yet - cap at a
+    // generous size (most recent first) instead of loading every row ever
+    // submitted.
+    private static final int LIST_CAP = 200;
+    private static final Sort MOST_RECENT_FIRST = Sort.by(Sort.Direction.DESC, "createdDate");
 
     // ─────────────────────────────────────────────────────────────────────────
     // CREATE
@@ -72,9 +82,8 @@ public class ExpenseReportService {
     @Transactional(readOnly = true)
     public List<ExpenseReportResponse> getMyExpenses(String username) {
         log.info("Fetching expenses for user {}", username);
-        return expenseRepository.findBySubmittedBy(username)
+        return expenseRepository.findBySubmittedBy(username, PageRequest.of(0, LIST_CAP, MOST_RECENT_FIRST))
                 .stream()
-                .sorted((a, b) -> b.getCreatedDate().compareTo(a.getCreatedDate()))
                 .map(expenseMapper::toResponse)
                 .collect(Collectors.toList());
     }
@@ -82,7 +91,7 @@ public class ExpenseReportService {
     @Transactional(readOnly = true)
     public List<ExpenseReportResponse> getAllExpenses() {
         log.info("Fetching all expense reports");
-        return expenseRepository.findAllByOrderByCreatedDateDesc()
+        return expenseRepository.findAllByOrderByCreatedDateDesc(PageRequest.of(0, LIST_CAP))
                 .stream()
                 .map(expenseMapper::toResponse)
                 .collect(Collectors.toList());
@@ -91,7 +100,8 @@ public class ExpenseReportService {
     @Transactional(readOnly = true)
     public List<ExpenseReportResponse> getPendingExpenses() {
         log.info("Fetching pending expense reports");
-        return expenseRepository.findByStatusOrderByCreatedDateDesc(ExpenseStatus.PENDING)
+        return expenseRepository
+                .findByStatusOrderByCreatedDateDesc(ExpenseStatus.PENDING, PageRequest.of(0, LIST_CAP))
                 .stream()
                 .map(expenseMapper::toResponse)
                 .collect(Collectors.toList());
@@ -109,7 +119,7 @@ public class ExpenseReportService {
     @Transactional(readOnly = true)
     public List<ExpenseReportResponse> getExpensesByCategory(ExpenseCategory category) {
         log.info("Fetching expense reports by category {}", category);
-        return expenseRepository.findByCategory(category)
+        return expenseRepository.findByCategory(category, PageRequest.of(0, LIST_CAP, MOST_RECENT_FIRST))
                 .stream()
                 .map(expenseMapper::toResponse)
                 .collect(Collectors.toList());
@@ -118,7 +128,7 @@ public class ExpenseReportService {
     @Transactional(readOnly = true)
     public List<ExpenseReportResponse> getExpensesByMachine(Long machineId) {
         log.info("Fetching expense reports for machine id={}", machineId);
-        return expenseRepository.findByMachineId(machineId)
+        return expenseRepository.findByMachineId(machineId, PageRequest.of(0, LIST_CAP, MOST_RECENT_FIRST))
                 .stream()
                 .map(expenseMapper::toResponse)
                 .collect(Collectors.toList());
@@ -147,6 +157,9 @@ public class ExpenseReportService {
         int year = saved.getCreatedDate().getYear();
         budgetService.recordApprovedExpense(saved.getAmount(), year);
 
+        auditEventService.record(reviewedBy, "EXPENSE_APPROVED", "ExpenseReport", saved.getId(),
+                "amount=" + saved.getAmount());
+
         log.info("Expense report id={} approved — amount={}", id, saved.getAmount());
         return expenseMapper.toResponse(saved);
     }
@@ -165,6 +178,8 @@ public class ExpenseReportService {
         expense.setRejectionReason(request.getRejectionReason());
 
         ExpenseReport saved = expenseRepository.save(expense);
+        auditEventService.record(reviewedBy, "EXPENSE_REJECTED", "ExpenseReport", saved.getId(),
+                "amount=" + saved.getAmount());
         log.info("Expense report id={} rejected", id);
         return expenseMapper.toResponse(saved);
     }

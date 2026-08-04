@@ -254,4 +254,32 @@ public class FaceRecognitionClient {
 
         return url + "?user_id=" + userId;
     }
+
+    /**
+     * Delete all stored embeddings for a user from the ML service.
+     * Called by the admin face-reset endpoint. Errors are best-effort;
+     * the caller should not fail if this throws.
+     */
+    public void deleteEnrollment(Long userId) {
+        try {
+            String base = properties.getBaseUrl() == null ? "" : properties.getBaseUrl().trim();
+            // DELETE /face/enroll?user_id={id}  — matches the Python router path
+            String path = properties.getEnrollPath() == null ? "/face/enroll" : properties.getEnrollPath().trim();
+
+            String url;
+            if (base.endsWith("/") && path.startsWith("/")) {
+                url = base.substring(0, base.length() - 1) + path;
+            } else if (!base.endsWith("/") && !path.startsWith("/")) {
+                url = base + "/" + path;
+            } else {
+                url = base + path;
+            }
+            url = url + "?user_id=" + userId;
+
+            restTemplate.exchange(url, HttpMethod.DELETE, HttpEntity.EMPTY, String.class);
+        } catch (Exception ex) {
+            // Best-effort — log and continue
+            throw new MlDependencyFailureException("Could not delete ML embedding for user " + userId + ": " + ex.getMessage(), ex);
+        }
+    }
 }

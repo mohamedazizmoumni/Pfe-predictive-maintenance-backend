@@ -76,6 +76,36 @@ public class StockNotificationService {
     }
     
     /**
+     * Create notification when the ML service predicts a part will reach a
+     * critical stock level (already breached or trending toward a stockout
+     * before a reorder placed today could arrive). Informational only — no
+     * ReorderRequest/StockOrder is created here or by the caller.
+     */
+    @Transactional
+    public void notifyAiShortagePrediction(String partName, Integer recommendedQuantity, String reason) {
+        try {
+            Notification notification = Notification.builder()
+                .machineId(null) // Stock notifications are not machine-specific
+                .title("🤖 AI Shortage Prediction: " + partName)
+                .body(String.format(
+                    "AI analysis predicts part '%s' will reach a critical stock level. Recommended reorder quantity: %d. Reason: %s",
+                    partName,
+                    recommendedQuantity,
+                    reason
+                ))
+                .riskLevel(RiskLevel.MEDIUM)
+                .targetRoles("STOCK_MANAGER,MANAGER,ADMIN")
+                .isRead(false)
+                .build();
+
+            notificationRepository.save(notification);
+            log.info("Created AI shortage prediction notification for part: {}", partName);
+        } catch (Exception e) {
+            log.error("Failed to create AI shortage prediction notification for part: {}", partName, e);
+        }
+    }
+
+    /**
      * Create notification when reorder request is created
      */
     @Transactional
@@ -91,10 +121,10 @@ public class StockNotificationService {
                     quantity
                 ))
                 .riskLevel(RiskLevel.LOW)
-                .targetRoles("MANAGER,ADMIN")
+                .targetRoles("FINANCE_MANAGER,ADMIN,SUPER_ADMIN")
                 .isRead(false)
                 .build();
-            
+
             notificationRepository.save(notification);
             log.info("Created reorder request notification for part: {}", partName);
         } catch (Exception e) {
