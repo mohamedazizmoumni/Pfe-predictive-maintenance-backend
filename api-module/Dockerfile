@@ -30,6 +30,8 @@ COPY api-module/src api-module/src
 RUN mvn -q -pl api-module -am -DskipTests clean package
 
 FROM eclipse-temurin:17-jre-jammy
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --create-home appuser
 WORKDIR /app
 COPY --from=build /workspace/api-module/target/api-module-*.jar app.jar
@@ -37,4 +39,8 @@ RUN mkdir -p /app/uploads /app/logs && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"' || exit 1
+
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
