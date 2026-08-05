@@ -173,6 +173,17 @@ management:
   endpoint:
     health:
       show-details: always
+      # Exposes /actuator/health/liveness and /actuator/health/readiness,
+      # which by default only aggregate Spring's built-in liveness/readiness
+      # state — NOT custom indicators like the pythonMl one. That indicator
+      # calls out to the ML service with retries/backoff; if it's slow or
+      # unreachable, that can stall the *aggregate* /actuator/health for
+      # well over a minute even though the app itself is fully up. Infra
+      # health checks (load balancers, CI smoke tests, k8s probes) should
+      # hit /actuator/health/liveness instead, which reflects "is the app
+      # itself alive" independent of downstream integration health.
+      probes:
+        enabled: true
 
 # ============================================================================
 # JWT
