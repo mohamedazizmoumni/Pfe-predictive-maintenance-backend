@@ -52,11 +52,6 @@ public class NotificationController {
                         .getContent();
             }
 
-            // Return empty list instead of null
-            if (notifications == null) {
-                notifications = new java.util.ArrayList<>();
-            }
-
             return ResponseEntity.ok(notifications);
         } catch (Exception e) {
             log.error("Error fetching notifications for role: {}", role, e);

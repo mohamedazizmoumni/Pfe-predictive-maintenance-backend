@@ -243,7 +243,7 @@ public class PartService {
         }
         
         // Validate file size (max 5MB)
-        long maxSize = 5 * 1024 * 1024; // 5MB
+        long maxSize = 5L * 1024 * 1024; // 5MB
         if (image.getSize() > maxSize) {
             throw new IllegalArgumentException("Image size must not exceed 5MB");
         }

@@ -239,7 +239,8 @@ public class GlobalExceptionHandler {
         // gets reported as a 500 "Internal server error" — misleading for
         // both the client (it's their bad input, not a server fault) and
         // monitoring/alerting (500s page as server incidents).
-        String requiredType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "the expected type";
+        Class<?> requiredTypeClass = ex.getRequiredType();
+        String requiredType = requiredTypeClass != null ? requiredTypeClass.getSimpleName() : "the expected type";
         String message = "Parameter '" + ex.getName() + "' must be " + requiredType
                 + ", got '" + ex.getValue() + "'";
         Map<String, Object> body = baseBody(HttpStatus.BAD_REQUEST, message, request.getRequestURI());
