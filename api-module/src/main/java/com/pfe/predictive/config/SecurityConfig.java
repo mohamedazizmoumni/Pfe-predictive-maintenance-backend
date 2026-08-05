@@ -94,7 +94,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/error").permitAll()
 
-                .requestMatchers("/health").permitAll()
+                // Actuator's real base path is /actuator, not /health — health must
+                // stay reachable without auth for load balancers / CI health probes;
+                // everything else under /actuator (metrics, prometheus, env, etc.)
+                // stays locked down since it can leak internals.
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/actuator/**")
                     .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
 
