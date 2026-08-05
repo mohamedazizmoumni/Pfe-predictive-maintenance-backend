@@ -25,7 +25,6 @@ COPY alert-module/src alert-module/src
 COPY inventory-module/src inventory-module/src
 COPY task-module/src task-module/src
 COPY nlp-module/src nlp-module/src
-COPY ml-module/src ml-module/src
 COPY api-module/src api-module/src
 RUN mvn -q -pl api-module -am -DskipTests clean package
 

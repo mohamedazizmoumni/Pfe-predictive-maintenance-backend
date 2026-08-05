@@ -186,5 +186,39 @@ public class DatasetLoaderService {
             double setting2,
             double setting3,
             double[] sensors) {
+
+        // Records auto-generate equals/hashCode/toString using reference
+        // identity for array components, not content — overridden so two
+        // rows with the same sensor values compare equal instead of by
+        // array reference.
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ParsedRow other)) return false;
+            return unitId == other.unitId
+                    && cycle == other.cycle
+                    && Double.compare(setting1, other.setting1) == 0
+                    && Double.compare(setting2, other.setting2) == 0
+                    && Double.compare(setting3, other.setting3) == 0
+                    && java.util.Arrays.equals(sensors, other.sensors);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = java.util.Objects.hash(unitId, cycle, setting1, setting2, setting3);
+            return 31 * result + java.util.Arrays.hashCode(sensors);
+        }
+
+        @Override
+        public String toString() {
+            return "ParsedRow[" +
+                    "unitId=" + unitId +
+                    ", cycle=" + cycle +
+                    ", setting1=" + setting1 +
+                    ", setting2=" + setting2 +
+                    ", setting3=" + setting3 +
+                    ", sensors=" + java.util.Arrays.toString(sensors) +
+                    ']';
+        }
     }
 }

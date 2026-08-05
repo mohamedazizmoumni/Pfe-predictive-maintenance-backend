@@ -31,6 +31,7 @@ public class RealisticDataInitializer implements CommandLineRunner {
     private final MachineSimulationStateRepository machineSimulationStateRepository;
     private final SensorTelemetryRepository sensorTelemetryRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final Random random = new Random();
 
     @Value("${app.demo-data.enabled:false}")
     private boolean demoDataEnabled;
@@ -404,12 +405,11 @@ public class RealisticDataInitializer implements CommandLineRunner {
         List<Sensor> sensors = sensorRepository.findAll();
         List<SensorTelemetry> telemetryList = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
-        Random random = new Random();
 
         // Generate telemetry data for the last 24 hours
         for (Sensor sensor : sensors) {
             for (int i = 0; i < 24; i++) {
-                LocalDateTime timestamp = now.minusHours(24 - i);
+                LocalDateTime timestamp = now.minusHours(24L - i);
                 
                 SensorTelemetry telemetry = new SensorTelemetry();
                 telemetry.setMachineId(sensor.getMachine().getId());

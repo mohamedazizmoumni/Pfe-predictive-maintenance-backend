@@ -187,7 +187,14 @@ public class FeatureEngineeringService {
         }
         
         // Linear regression: y = mx + b, we want m (slope)
-        double slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        double denominator = n * sumX2 - sumX * sumX;
+        if (denominator == 0.0) {
+            // x is the 0..n-1 time index, so this is only reachable if a future
+            // change stops guaranteeing distinct x values — treat as "no trend"
+            // rather than divide by zero.
+            return 0.0;
+        }
+        double slope = (n * sumXY - sumX * sumY) / denominator;
         
         // Convert to per-hour rate (assuming data points are evenly spaced)
         double hoursPerDataPoint = (double) HOURS_WINDOW / n;
