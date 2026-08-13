@@ -102,10 +102,36 @@ public abstract class AbstractIntegrationTest {
                 .orElseThrow(() -> new IllegalStateException(
                         "Docker network '" + IT_DOCKER_NETWORK + "' not found - required when IT_POSTGRES_DOCKER_NETWORK is set"));
 
-        // .id(networkId) makes this wrap the EXISTING network rather than
-        // create a new one - Network.NetworkImpl only calls Docker's
-        // create-network API lazily from getId() when no id was preset.
-        Network existingNetwork = Network.builder().id(networkId).build();
+        // Network.builder().id(networkId) does NOT wrap the existing network -
+        // verified by decompiling NetworkImpl.getId(): it unconditionally calls
+        // its own create() (a real `docker network create`) the first time
+        // getId() is invoked and overwrites the preset id field with the new
+        // response, regardless of what .id() was given. Confirmed in CI: the
+        // postgres container ended up on a brand-new ad-hoc network (random
+        // name, different subnet from devops_devops-net) that the jenkins
+        // container was never attached to, causing UnknownHostException for
+        // the alias even though the alias itself was applied correctly - just
+        // on the wrong network. The only way to truly reuse a pre-existing
+        // network is to implement the Network interface directly and return
+        // the real id from getId(), bypassing NetworkImpl entirely.
+        Network existingNetwork = new Network() {
+            @Override
+            public String getId() {
+                return networkId;
+            }
+
+            @Override
+            public void close() {
+                // no-op: devops_devops-net is externally managed by
+                // docker-compose - Testcontainers must never create, own, or
+                // remove it.
+            }
+
+            @Override
+            public org.junit.runners.model.Statement apply(org.junit.runners.model.Statement base, org.junit.runner.Description description) {
+                return base;
+            }
+        };
 
         return container
                 .withNetwork(existingNetwork)
