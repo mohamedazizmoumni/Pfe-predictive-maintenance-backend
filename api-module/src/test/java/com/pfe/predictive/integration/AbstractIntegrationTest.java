@@ -47,11 +47,44 @@ public abstract class AbstractIntegrationTest {
     // this environment on POST requests, even though the server processed
     // them successfully. MockMvc still drives the real DispatcherServlet and
     // Spring Security filter chain end-to-end without that networking layer.
-    static final PostgreSQLContainer<?> POSTGRES =
+    //
+    // IT_POSTGRES_DOCKER_NETWORK: unset everywhere except the Jenkins-in-
+    // Docker CI (sentinel-devops/Jenkinsfile.ci-local), where the JVM running
+    // these tests is itself inside a container reached only via a Docker
+    // socket mount (DooD). There, Testcontainers' normal host+mapped-port
+    // addressing hits a Docker hairpin-NAT limitation: a sibling container
+    // cannot reliably reach another sibling's published port back through
+    // the bridge gateway - confirmed in that CI as a flat "Connection
+    // refused" at the gateway IP, identical whether the host was
+    // auto-detected by Testcontainers or computed manually. When this env
+    // var is set, Postgres joins that same named network directly and is
+    // addressed by container name instead of by published port, avoiding
+    // NAT entirely. Every other environment (a developer's machine, the
+    // Nexus/Vercel/Render Jenkinsfile's Docker-agent stages) leaves this
+    // unset and gets Testcontainers' normal, unmodified behavior.
+    private static final String IT_DOCKER_NETWORK = System.getenv("IT_POSTGRES_DOCKER_NETWORK");
+    private static final String IT_POSTGRES_CONTAINER_NAME = "sentinel-it-postgres";
+
+    static final PostgreSQLContainer<?> POSTGRES = configureNetwork(
             new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
                     .withDatabaseName("pfe_it")
                     .withUsername("pfe_it")
-                    .withPassword("pfe_it");
+                    .withPassword("pfe_it"));
+
+    private static PostgreSQLContainer<?> configureNetwork(PostgreSQLContainer<?> container) {
+        if (IT_DOCKER_NETWORK == null || IT_DOCKER_NETWORK.isBlank()) {
+            return container;
+        }
+        // withNetworkMode is the low-level escape hatch that joins an
+        // EXISTING external network as-is, rather than Testcontainers'
+        // withNetwork(Network)/withNetworkAliases() pair, which only manages
+        // networks Testcontainers itself creates. Docker's embedded DNS on a
+        // user-defined bridge resolves by container --name, not by
+        // --hostname, so the name (not just the hostname) must be fixed here.
+        return container
+                .withNetworkMode(IT_DOCKER_NETWORK)
+                .withCreateContainerCmdModifier(cmd -> cmd.withName(IT_POSTGRES_CONTAINER_NAME));
+    }
 
     static {
         POSTGRES.start();
@@ -59,7 +92,10 @@ public abstract class AbstractIntegrationTest {
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.url", () ->
+                (IT_DOCKER_NETWORK == null || IT_DOCKER_NETWORK.isBlank())
+                        ? POSTGRES.getJdbcUrl()
+                        : "jdbc:postgresql://" + IT_POSTGRES_CONTAINER_NAME + ":5432/pfe_it");
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
 
