@@ -162,6 +162,18 @@ server:
     enabled: true
 
 # ============================================================================
+# MONITORING (Prometheus scrape credential — see PrometheusScrapeSecurityConfig)
+# ============================================================================
+# /actuator/prometheus needs its own long-lived credential separate from the
+# JWT flow (a scrape_config can't refresh an expiring token). No password
+# default on purpose — leaving MONITORING_PROMETHEUS_PASSWORD unset locks the
+# endpoint, it does not open it.
+monitoring:
+  prometheus:
+    username: ${MONITORING_PROMETHEUS_USERNAME:prometheus}
+    password: ${MONITORING_PROMETHEUS_PASSWORD:}
+
+# ============================================================================
 # MANAGEMENT
 # ============================================================================
 management:
@@ -236,6 +248,26 @@ cors:
 alert:
   bulk-operation-limit: 1000
 
+  # Priority 10.4: when a CRITICAL-severity alert auto-generates a
+  # MaintenanceRecommendation (see MachineStreamingService), also
+  # auto-approve it immediately instead of waiting for a manager to click
+  # Approve — same off-by-default convention as maintenance.auto-escalation-enabled
+  # and inventory.auto-reorder-enabled. HIGH-severity alerts still always
+  # require manual approval regardless of this flag.
+  auto-create-maintenance-enabled: false
+
+  # AlertDecisionEngine's severity thresholds (Priority 2: configurable
+  # AI -> alert severity mapping). Health is a 0-100 score computed from the
+  # ML prediction; a machine at or below critical-health-threshold (or
+  # flagged requiresImmediateAction, or riskLevel=CRITICAL) always opens a
+  # CRITICAL incident regardless of the other thresholds. Defaults below
+  # match the values already in production use - change only deliberately.
+  severity:
+    critical-health-threshold: 30.0
+    high-health-threshold: 40.0
+    warning-health-threshold: 50.0
+    warning-anomaly-probability-threshold: 0.8
+
   notifications:
     enabled: true
 
@@ -268,6 +300,15 @@ maintenance:
   # Default recurrence used to set Machine.nextMaintenanceDate when a rapport
   # gets final approval, until a real MaintenanceTemplate entity exists.
   default-recurrence-days: 90
+
+# ============================================================================
+# FLEET HEALTH DIGEST
+# ============================================================================
+fleet:
+  digest:
+    enabled: true
+    # 7 days in ms. Sent to MANAGER/ADMIN/SUPER_ADMIN via FleetHealthDigestScheduler.
+    interval-ms: 604800000
 
 # ============================================================================
 # PREDICTION SETTINGS

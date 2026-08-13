@@ -2,6 +2,7 @@ package com.pfe.predictive.maintenance.service;
 
 import com.pfe.predictive.audit.service.AuditEventService;
 import com.pfe.predictive.common.service.EmailService;
+import com.pfe.predictive.common.service.EscalationEmailContent;
 import com.pfe.predictive.core.entity.Maintenance;
 import com.pfe.predictive.core.entity.MaintenancePriority;
 import com.pfe.predictive.core.entity.MaintenanceStatus;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -35,7 +37,8 @@ public class MaintenanceEscalationService {
 
     private static final List<MaintenanceStatus> ESCALATABLE_STATUSES =
             List.of(MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS);
-    private static final List<String> ESCALATION_NOTIFY_ROLES = List.of("MANAGER", "ADMIN", "SUPER_ADMIN");
+    private static final DateTimeFormatter ESCALATION_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a");
 
     private final MaintenanceRepository maintenanceRepository;
     private final EmailService emailService;
@@ -88,18 +91,17 @@ public class MaintenanceEscalationService {
 
     private void notifyEscalation(Maintenance maintenance, MaintenancePriority previous, MaintenancePriority next) {
         try {
-            String subject = "Maintenance #" + maintenance.getId() + " auto-escalated to " + next;
-            String body = "<div style=\"font-family:Arial,sans-serif;font-size:14px;color:#111827;\">"
-                    + "<h2 style=\"margin:0 0 12px 0;\">Overdue Maintenance Escalated</h2>"
-                    + "<p><strong>Work order:</strong> #" + maintenance.getId() + "</p>"
-                    + "<p><strong>Machine ID:</strong> " + maintenance.getMachineId() + "</p>"
-                    + "<p><strong>Was scheduled for:</strong> " + maintenance.getScheduledDate() + "</p>"
-                    + "<p><strong>Priority:</strong> " + previous + " &rarr; " + next + "</p>"
-                    + "<p style=\"margin-top:16px;color:#6b7280;font-size:12px;\">"
-                    + "This work order has been open past the configured overdue threshold ("
-                    + daysOverdueThreshold + " day(s)) and was escalated automatically.</p>"
-                    + "</div>";
-            emailService.sendEmailToUsersByRoles(ESCALATION_NOTIFY_ROLES, subject, body);
+            EscalationEmailContent content = new EscalationEmailContent(
+                    maintenance.getId(),
+                    maintenance.getMachineId(),
+                    previous.toString(),
+                    next.toString(),
+                    maintenance.getScheduledDate() != null
+                            ? maintenance.getScheduledDate().format(ESCALATION_DATE_FORMATTER)
+                            : null,
+                    daysOverdueThreshold
+            );
+            emailService.sendEscalationNotification(content);
         } catch (Exception ex) {
             log.error("Failed to send escalation notification for maintenance {}: {}",
                     maintenance.getId(), ex.getMessage(), ex);

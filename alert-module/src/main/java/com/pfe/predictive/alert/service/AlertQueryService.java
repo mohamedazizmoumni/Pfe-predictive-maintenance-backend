@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.EntityNotFoundException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -280,6 +281,32 @@ public class AlertQueryService {
                 + countByStatus(AlertStatus.ESCALATED)
                 + countByStatus(AlertStatus.CLOSED))
             .build();
+    }
+
+    /**
+     * Average time-to-close across every CLOSED alert, computed from real
+     * timestamps (Alert.createdDate -> Alert.closedDate; closedDate is the
+     * field AlertMapper.mapClosure() actually sets on close - resolvedDate
+     * is a separate column nothing in this codebase ever writes, so it isn't
+     * usable for this). Null when there are no closed alerts yet - the
+     * caller (AlertStatsResponse) treats null as "no data", not zero.
+     *
+     * @return average resolution time in hours, or null if no alert has been closed yet
+     */
+    public Double getAverageResolutionTimeHours() {
+        List<Alert> closedAlerts = alertRepository.findByStatus(AlertStatus.CLOSED, Pageable.unpaged()).getContent();
+
+        List<Long> resolutionMinutes = closedAlerts.stream()
+            .filter(alert -> alert.getCreatedDate() != null && alert.getClosedDate() != null)
+            .map(alert -> Duration.between(alert.getCreatedDate(), alert.getClosedDate()).toMinutes())
+            .toList();
+
+        if (resolutionMinutes.isEmpty()) {
+            return null;
+        }
+
+        double averageMinutes = resolutionMinutes.stream().mapToLong(Long::longValue).average().orElse(0);
+        return Math.round(averageMinutes / 60.0 * 10) / 10.0; // hours, 1 decimal place
     }
 
     /**

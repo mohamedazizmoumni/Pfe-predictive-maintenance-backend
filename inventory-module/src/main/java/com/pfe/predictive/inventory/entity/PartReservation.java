@@ -40,6 +40,13 @@ public class PartReservation {
     @Column(nullable = false)
     private Integer quantityReserved;
 
+    // Set only once status becomes CONSUMED — the amount actually decremented
+    // from stock, which may be less than quantityReserved (partial use). The
+    // gap (quantityReserved - quantityConsumed) needs no separate release:
+    // availableStock() only sums RESERVED-status rows, so it drops out of the
+    // "held" pool the instant status leaves RESERVED.
+    private Integer quantityConsumed;
+
     private Long maintenanceId;
 
     @Enumerated(EnumType.STRING)

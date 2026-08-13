@@ -54,16 +54,62 @@ public class PartReservationService {
 
     /** Converts a reservation into an actual stock decrement — the part is now used, not just held. */
     public PartReservationResponse consume(Long id) {
+        return consume(id, null);
+    }
+
+    /**
+     * Same as consume(id), but for an actual-used quantity that may be less
+     * than what was reserved (the acceptance case: reserve 2, technician
+     * only uses 1). quantityUsed is clamped to [0, quantityReserved] — it
+     * can't consume more than this reservation holds; a caller needing more
+     * than was reserved must cover the excess through another path (e.g. a
+     * second reservation, or MaintenanceRapportService's name-match
+     * fallback for unreserved stock). Null quantityUsed means "consume the
+     * full reserved amount", matching the original single-arg behavior.
+     */
+    public PartReservationResponse consume(Long id, Integer quantityUsed) {
         PartReservation reservation = getActiveOrThrow(id);
         Part part = partRepository.findById(reservation.getPartId())
                 .orElseThrow(() -> new IllegalArgumentException("Part not found: " + reservation.getPartId()));
 
-        part.setCurrentStock(Math.max(0, part.getCurrentStock() - reservation.getQuantityReserved()));
+        int actualConsumed = quantityUsed == null
+                ? reservation.getQuantityReserved()
+                : Math.max(0, Math.min(quantityUsed, reservation.getQuantityReserved()));
+
+        part.setCurrentStock(Math.max(0, part.getCurrentStock() - actualConsumed));
         partRepository.save(part);
 
+        reservation.setQuantityConsumed(actualConsumed);
         reservation.setStatus(PartReservationStatus.CONSUMED);
         reservation.setResolvedAt(LocalDateTime.now());
         return toResponse(reservationRepository.save(reservation), part.getName());
+    }
+
+    /**
+     * Active (RESERVED) reservations for a given maintenance job and part,
+     * oldest first — used by MaintenanceRapportService to consume against
+     * the right reservation(s) when a technician records actual usage.
+     */
+    @Transactional(readOnly = true)
+    public List<PartReservation> findActiveReservations(Long maintenanceId, Long partId) {
+        if (maintenanceId == null || partId == null) {
+            return List.of();
+        }
+        return reservationRepository.findByMaintenanceId(maintenanceId).stream()
+                .filter(r -> partId.equals(r.getPartId()) && r.getStatus() == PartReservationStatus.RESERVED)
+                .sorted((a, b) -> a.getReservedAt().compareTo(b.getReservedAt()))
+                .toList();
+    }
+
+    /** Releases every still-active (RESERVED) reservation for a job — used when a maintenance task is cancelled/deleted. */
+    public void releaseAllForMaintenance(Long maintenanceId) {
+        reservationRepository.findByMaintenanceId(maintenanceId).stream()
+                .filter(r -> r.getStatus() == PartReservationStatus.RESERVED)
+                .forEach(r -> {
+                    r.setStatus(PartReservationStatus.RELEASED);
+                    r.setResolvedAt(LocalDateTime.now());
+                    reservationRepository.save(r);
+                });
     }
 
     @Transactional(readOnly = true)
@@ -114,6 +160,7 @@ public class PartReservationService {
                 .partId(reservation.getPartId())
                 .partName(partName)
                 .quantityReserved(reservation.getQuantityReserved())
+                .quantityConsumed(reservation.getQuantityConsumed())
                 .maintenanceId(reservation.getMaintenanceId())
                 .status(reservation.getStatus())
                 .reservedBy(reservation.getReservedBy())

@@ -45,6 +45,9 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance, Long> 
 
     long countByStatusIn(List<MaintenanceStatus> statuses);
 
+    // Fleet health digest (Priority 7) — preventive vs corrective completed-this-period counts.
+    long countByTypeAndCompletedDateAfter(MaintenanceType type, LocalDateTime cutoff);
+
     @Query("""
         SELECT m FROM Maintenance m
         WHERE (:status IS NULL OR m.status = :status)

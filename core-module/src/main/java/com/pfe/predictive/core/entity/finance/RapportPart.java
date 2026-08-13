@@ -16,6 +16,16 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class RapportPart {
 
+    // Nullable: only set when the technician picked this line from an active
+    // PartReservation for the job (see task-completion-modal's "Use Reserved
+    // Part" action) rather than typing a free-text part name. Lets
+    // MaintenanceRapportService.recordPartUsage() consume the matching
+    // reservation instead of doing a second, independent stock decrement.
+    // Null means "free-text entry, name-match against the Part catalog" -
+    // the original, still-supported behavior.
+    @Column(name = "part_id")
+    private Long partId;
+
     @Column(name = "part_name", nullable = false, length = 255)
     private String partName;
 

@@ -178,6 +178,7 @@ public class AlertController {
             .warningCount(severityStats.warning)
             .infoCount(severityStats.info)
             .unviewedCount(alertQueryService.getUnviewedAlerts(authentication.getName(), Pageable.unpaged()).getTotalElements())
+            .averageResolutionTimeHours(alertQueryService.getAverageResolutionTimeHours())
             .build();
 
         return ResponseEntity.ok(response);

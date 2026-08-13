@@ -39,17 +39,30 @@ public class MaintenanceRecommendationController {
     private final MaintenanceRecommendationApprovalService approvalService;
 
     /**
-     * Generate maintenance recommendation
-     * 
-     * POST /api/v1/finance/recommendations/generate
-     * 
+     * Preview-only cost/parts estimate. Resolves {@code machineId} against
+     * {@link com.pfe.predictive.maintenancecost.entity.Machine} — a separate,
+     * sparsely-seeded table ({@code maintenance_cost_machines}, ~3 demo rows),
+     * NOT the real {@code machines} table the rest of the app uses. Any real
+     * machine outside those demo rows 404s here.
+     * <p>
+     * <b>Superseded for the real generate/approve/reject workflow</b> by
+     * {@code POST /generate-and-save} + {@code GET /history} +
+     * {@code PUT /{id}/approve}/{@code /reject} below, which resolve against
+     * the real {@link com.pfe.predictive.core.entity.Machine} instead. No
+     * frontend code calls this method as of the Priority-0.1 fix — kept only
+     * because {@link CostComparisonController} still shares the legacy
+     * cost-model tables and this method's cost-estimate logic. Do not wire
+     * new frontend code to this endpoint; use the saved-recommendation flow.
+     *
+     * POST /api/v1/maintenance-cost/recommendations/generate
+     *
      * @param request Recommendation request with failure probability and timeline
-     * @return Comprehensive maintenance recommendation
+     * @return Comprehensive maintenance recommendation (preview only, not persisted)
      */
     @PostMapping("/generate")
     @PreAuthorize("hasAnyRole('FINANCE_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN')")
-    @Operation(summary = "Generate maintenance recommendation", 
-               description = "Generate smart maintenance recommendation based on failure probability, cost analysis, and parts availability")
+    @Operation(summary = "[Legacy preview, real machines outside 3 demo rows will 404] Generate maintenance recommendation",
+               description = "Superseded by /generate-and-save for real machines - see class Javadoc on this method")
     public ResponseEntity<MaintenanceRecommendationResponse> generateRecommendation(
             @Valid @RequestBody MaintenanceRecommendationRequest request) {
         
@@ -79,12 +92,11 @@ public class MaintenanceRecommendationController {
      * @param daysUntilFailure Days until predicted failure; same fallback
      * @return Maintenance recommendation
      */
+    // Same legacy-table caveat as /generate above — superseded by /generate-and-save.
     @GetMapping("/machine/{machineId}")
     @PreAuthorize("hasAnyRole('FINANCE_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN')")
-    @Operation(summary = "Get recommendation for machine",
-               description = "Get maintenance recommendation for a specific machine. " +
-                       "failureProbability/daysUntilFailure are optional and default to a " +
-                       "moderate-risk estimate when the caller doesn't have a real prediction to pass.")
+    @Operation(summary = "[Legacy preview, real machines outside 3 demo rows will 404] Get recommendation for machine",
+               description = "Superseded by /generate-and-save for real machines - see class Javadoc on /generate")
     public ResponseEntity<MaintenanceRecommendationResponse> getRecommendationForMachine(
             @PathVariable Long machineId,
             @RequestParam(required = false, defaultValue = "0.5") Double failureProbability,

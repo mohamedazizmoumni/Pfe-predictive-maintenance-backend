@@ -46,6 +46,23 @@ public class MaintenanceRecommendationApprovalService {
     private final MaintenanceRepository maintenanceRepository;
     private final AuditEventService auditEventService;
 
+    /**
+     * Same as generateAndSave(), but a no-op (returns empty) if the machine
+     * already has a PENDING recommendation — used by the automatic
+     * AI-incident-triggered path (MachineStreamingService) so a machine
+     * stuck at HIGH/CRITICAL across several telemetry ticks doesn't pile up
+     * duplicate recommendations a manager hasn't had a chance to act on yet.
+     * Manual generation from the Recommendations page still always creates a
+     * new one via generateAndSave() directly - this guard is opt-in.
+     */
+    public java.util.Optional<SavedRecommendationResponse> generateAndSaveIfNoPending(
+            Long machineId, double failureProbability, int daysUntilPredictedFailure, String generatedBy) {
+        if (recommendationRepository.existsByMachineIdAndStatus(machineId, MaintenanceRecommendationStatus.PENDING)) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(generateAndSave(machineId, failureProbability, daysUntilPredictedFailure, generatedBy));
+    }
+
     public SavedRecommendationResponse generateAndSave(Long machineId, double failureProbability,
                                                          int daysUntilPredictedFailure, String generatedBy) {
         Machine machine = machineRepository.findById(machineId)

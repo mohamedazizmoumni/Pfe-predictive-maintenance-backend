@@ -24,10 +24,9 @@ public class AlertStatsResponse {
     private Long infoCount;
     private Long unviewedCount;
 
-    public double getAverageResolutionTime() {
-        if (totalAlerts == null || totalAlerts == 0) {
-            return 0;
-        }
-        return 1.0;
-    }
+    // Real average of (closedDate - createdDate) across CLOSED alerts, computed
+    // in AlertQueryService.getAverageResolutionTimeHours(). Null (not 0) when
+    // there are no closed alerts yet - 0 would falsely read as "resolved
+    // instantly", not "no data".
+    private Double averageResolutionTimeHours;
 }

@@ -7,6 +7,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -173,6 +174,256 @@ public class EmailService {
         sendEmailInternal(toEmail, subject, body, true);
     }
 
+    /**
+     * Notifies a technician/user they've been assigned a task or maintenance
+     * work order. One shared builder for both entity types (TaskService and
+     * MaintenanceController) so a "new task" email and a "new maintenance
+     * work order" email look identical apart from their content — same
+     * Sentinel-branded shell, same priority-accent-colored layout everything
+     * else in this class uses.
+     */
+    @Async
+    public void sendAssignmentNotification(String toEmail, AssignmentEmailContent content) {
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("Skipping assignment notification: recipient has no email on file");
+            return;
+        }
+
+        String subject = "New " + content.entityTypeLabel() + " Assigned - #" + content.entityId();
+        String body = buildAssignmentHtmlEmail(content);
+
+        log.info("Queueing {} assignment notification to {}", content.entityTypeLabel(), toEmail);
+        sendEmailInternal(toEmail, subject, body, true);
+    }
+
+    /**
+     * Notifies MANAGER/ADMIN/SUPER_ADMIN that an overdue maintenance work
+     * order was auto-escalated to a higher priority (MaintenanceEscalationService).
+     */
+    @Async
+    public void sendEscalationNotification(EscalationEmailContent content) {
+        String subject = "Maintenance #" + content.maintenanceId() + " auto-escalated to " + content.newPriority();
+        String body = buildEscalationHtmlEmail(content);
+
+        log.info("Queueing escalation notification for maintenance {}", content.maintenanceId());
+        sendEmailToUsersByRoles(ALERT_RECIPIENT_ROLES, subject, body);
+    }
+
+    /**
+     * Priority 6: sent to the manager who just approved a rapport, with the
+     * Priority 5 intervention-report PDF attached. This is the only path in
+     * the class that produces a multipart message, since it's the only email
+     * that needs a real attachment.
+     */
+    @Async
+    public void sendMaintenanceReportEmail(String toEmail, String recipientName, MaintenanceReportEmailContent content, byte[] pdfBytes) {
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("Skipping maintenance report email: recipient has no email on file");
+            return;
+        }
+
+        String subject = "Maintenance Report Approved - " + content.machineLabel() + " (Rapport #" + content.rapportId() + ")";
+        String body = buildMaintenanceReportHtmlEmail(content, recipientName);
+        String filename = "maintenance-report-" + content.rapportId() + ".pdf";
+
+        log.info("Queueing maintenance report email (with PDF) to {}", toEmail);
+        sendEmailWithAttachmentInternal(toEmail, subject, body, pdfBytes, filename);
+    }
+
+    /**
+     * Priority 6: sanitized "maintenance completed" notice for a customer
+     * linked to the machine. Deliberately built from a separate template
+     * (not sendMaintenanceReportEmail's) and never carries the internal PDF
+     * — no cost, technician name, or work-performed detail, per the
+     * "do not expose internal information to customers" requirement.
+     */
+    @Async
+    public void sendMaintenanceCompletedCustomerNotification(String toEmail, String recipientName, MaintenanceReportEmailContent content) {
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("Skipping customer maintenance notification: recipient has no email on file");
+            return;
+        }
+
+        String subject = "Maintenance Completed - " + content.machineLabel();
+        String body = buildMaintenanceCompletedCustomerHtmlEmail(content, recipientName);
+
+        log.info("Queueing customer maintenance-completed notification to {}", toEmail);
+        sendEmailInternal(toEmail, subject, body, true);
+    }
+
+    /**
+     * Priority 7: sent to MANAGER/ADMIN/SUPER_ADMIN on a configurable
+     * schedule (FleetHealthDigestScheduler) with a snapshot of real
+     * fleet-wide KPIs. Reuses sendEmailToUsersByRoles — same recipient
+     * resolution/dedupe as escalation and alert notifications, no new
+     * broadcast mechanism.
+     */
+    @Async
+    public void sendFleetHealthDigest(FleetHealthDigestEmailContent content) {
+        String subject = "Weekly Fleet Health Digest - " + content.periodLabel();
+        String body = buildFleetHealthDigestHtmlEmail(content);
+
+        log.info("Queueing weekly fleet health digest ({})", content.periodLabel());
+        sendEmailToUsersByRoles(ALERT_RECIPIENT_ROLES, subject, body);
+    }
+
+    private String buildFleetHealthDigestHtmlEmail(FleetHealthDigestEmailContent content) {
+        String accentColor = "#2563eb";
+        StringBuilder html = new StringBuilder();
+        openShell(html);
+        appendHeader(html, accentColor, "&#128202;");
+
+        html.append("<tr><td style=\"padding:8px 36px 36px;\">");
+        html.append(eyebrow("#94a3b8", "Weekly Fleet Health Digest"));
+        html.append("<p style=\"margin:6px 0 22px;color:#0f172a;font-size:19px;font-weight:700;letter-spacing:-0.01em;\">")
+            .append(escapeHtml(content.periodLabel())).append("</p>");
+
+        html.append("<p style=\"margin:28px 0 10px;color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;\">Fleet Overview</p>");
+        html.append(insightGrid(List.of(
+                new String[]{"Machines", String.valueOf(content.machineCount())},
+                new String[]{"Avg. Fleet Health", content.fleetAverageHealth() != null ? String.format("%.1f%%", content.fleetAverageHealth()) : "Not available"},
+                new String[]{"Open Work Orders", String.valueOf(content.openWorkOrders())},
+                new String[]{"Overdue Work Orders", String.valueOf(content.overdueWorkOrders())},
+                new String[]{"Budget Utilization (YTD)", content.budgetUtilizationPercentage() != null ? content.budgetUtilizationPercentage() + "%" : "No budget set"}
+        )));
+
+        html.append("<p style=\"margin:28px 0 10px;color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;\">Alerts This Period</p>");
+        html.append(insightGrid(List.of(
+                new String[]{"New Alerts", String.valueOf(content.newAlertsThisWeek())},
+                new String[]{"Resolved Alerts", String.valueOf(content.resolvedAlertsThisWeek())},
+                new String[]{"Currently Unresolved", String.valueOf(content.unresolvedAlerts())},
+                new String[]{"Avg. Resolution Time", content.averageResolutionTimeHours() != null ? String.format("%.1f hrs", content.averageResolutionTimeHours()) : "Not available"}
+        )));
+
+        html.append("<p style=\"margin:28px 0 10px;color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;\">Maintenance Completed This Period</p>");
+        html.append(insightGrid(List.of(
+                new String[]{"Preventive", String.valueOf(content.preventiveCompletedThisWeek())},
+                new String[]{"Corrective", String.valueOf(content.correctiveCompletedThisWeek())}
+        )));
+
+        if (content.topReliabilityRisks() != null && !content.topReliabilityRisks().isEmpty()) {
+            html.append("<p style=\"margin:28px 0 10px;color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;\">Top Reliability Risks (lowest MTBF)</p>");
+            html.append(calloutOpen("#fff7ed", "#ea580c"));
+            for (FleetHealthDigestEmailContent.TopRisk risk : content.topReliabilityRisks()) {
+                html.append("<p style=\"margin:0 0 6px;color:#7c2d12;font-size:13.5px;line-height:1.5;\">")
+                    .append("&bull; ").append(escapeHtml(risk.machineName()))
+                    .append(" &mdash; MTBF ")
+                    .append(risk.mtbfHours() != null ? String.format("%.0f hrs", risk.mtbfHours()) : "N/A")
+                    .append(", ").append(risk.failureCount() != null ? risk.failureCount() : 0).append(" failure(s)")
+                    .append("</p>");
+            }
+            html.append(calloutClose());
+        }
+
+        if (content.actionUrl() != null && !content.actionUrl().isBlank()) {
+            html.append(ctaButton(accentColor, "Open Dashboard", content.actionUrl()));
+        }
+
+        html.append("</td></tr>");
+        appendFooter(html, "This is an automated weekly digest — please do not reply to this email.");
+        closeShell(html);
+
+        return html.toString();
+    }
+
+    private String buildAssignmentHtmlEmail(AssignmentEmailContent content) {
+        String accentColor = priorityAccentColor(content.priority());
+        String entityLabel = content.entityTypeLabel() != null ? content.entityTypeLabel() : "Task";
+
+        StringBuilder html = new StringBuilder();
+        openShell(html);
+        appendHeader(html, accentColor, "&#128203;");
+
+        html.append("<tr><td style=\"padding:8px 36px 36px;\">");
+        html.append(eyebrow("#94a3b8", "New " + entityLabel + " Assigned"));
+        html.append("<p style=\"margin:6px 0 20px;color:#0f172a;font-size:19px;font-weight:700;letter-spacing:-0.01em;\">")
+            .append(escapeHtml(content.title() != null && !content.title().isBlank()
+                    ? content.title() : entityLabel + " #" + content.entityId()))
+            .append("</p>");
+
+        html.append("<p style=\"margin:0 0 22px;color:#334155;font-size:14.5px;line-height:1.6;\">Hi ")
+            .append(escapeHtml(content.recipientName() != null && !content.recipientName().isBlank() ? content.recipientName() : "there"))
+            .append(", a new ").append(escapeHtml(entityLabel.toLowerCase())).append(" has been assigned to you")
+            .append(content.assignedBy() != null && !content.assignedBy().isBlank()
+                    ? " by <strong>" + escapeHtml(content.assignedBy()) + "</strong>" : "")
+            .append(". Review the details below and take action when you're ready.</p>");
+
+        if (content.description() != null && !content.description().isBlank()) {
+            html.append(calloutOpen("#f8fafc", "#cbd5e1"));
+            html.append(eyebrow("#64748b", "Description"));
+            html.append("<p style=\"margin:6px 0 0;color:#334155;font-size:14.5px;line-height:1.6;white-space:pre-wrap;\">")
+                .append(escapeHtml(content.description())).append("</p>");
+            html.append(calloutClose());
+        }
+
+        List<String[]> pairs = new java.util.ArrayList<>();
+        pairs.add(new String[]{entityLabel + " ID", "#" + content.entityId()});
+        pairs.add(new String[]{"Priority", content.priority() != null ? content.priority() : "Not set"});
+        pairs.add(new String[]{"Status", content.status() != null ? content.status() : "Not set"});
+        if (content.machineId() != null) {
+            pairs.add(new String[]{"Machine ID", "#" + content.machineId()});
+        }
+        if (content.dateLabel() != null && content.dateValue() != null && !content.dateValue().isBlank()) {
+            pairs.add(new String[]{content.dateLabel(), content.dateValue()});
+        }
+        html.append(insightGrid(pairs));
+
+        html.append(ctaButton(accentColor,
+                content.actionLabel() != null ? content.actionLabel() : "View " + entityLabel,
+                content.actionUrl()));
+
+        html.append("</td></tr>");
+        appendFooter(html, "This is an automated notification — please do not reply to this email.");
+        closeShell(html);
+
+        return html.toString();
+    }
+
+    private String buildEscalationHtmlEmail(EscalationEmailContent content) {
+        String accentColor = priorityAccentColor(content.newPriority());
+        String machineUrl = machineUrl(content.machineId());
+
+        StringBuilder html = new StringBuilder();
+        openShell(html);
+        appendHeader(html, accentColor, "&#9888;");
+
+        html.append("<tr><td style=\"padding:8px 36px 36px;\">");
+        html.append(eyebrow("#94a3b8", "Overdue Maintenance Escalated"));
+        html.append("<p style=\"margin:6px 0 22px;color:#0f172a;font-size:19px;font-weight:700;letter-spacing:-0.01em;\">Work Order #")
+            .append(content.maintenanceId()).append("</p>");
+
+        html.append(calloutOpen("#fff7ed", accentColor));
+        html.append("<p style=\"margin:0;color:#7c2d12;font-size:14.5px;line-height:1.6;\">This work order has been open past the configured overdue threshold (")
+            .append(content.overdueThresholdDays()).append(" day(s)) and was escalated automatically from ")
+            .append(pill(priorityAccentColor(content.previousPriority()), content.previousPriority()))
+            .append(" to ").append(pill(accentColor, content.newPriority())).append(".</p>");
+        html.append(calloutClose());
+
+        html.append(insightGrid(List.of(
+                new String[]{"Machine ID", "#" + content.machineId()},
+                new String[]{"Was Scheduled For", content.scheduledDate() != null ? content.scheduledDate() : "Not set"}
+        )));
+
+        html.append(ctaButton(accentColor, "View Machine", machineUrl));
+
+        html.append("</td></tr>");
+        appendFooter(html, "This is an automated notification — please do not reply to this email.");
+        closeShell(html);
+
+        return html.toString();
+    }
+
+    private String priorityAccentColor(String priority) {
+        String normalized = priority == null ? "" : priority.toUpperCase();
+        return switch (normalized) {
+            case "CRITICAL", "URGENT" -> "#dc2626";
+            case "HIGH" -> "#ea580c";
+            case "MEDIUM" -> "#d97706";
+            case "LOW" -> "#16a34a";
+            default -> "#2563eb";
+        };
+    }
+
     private String buildInquiryHtmlEmail(String inquiryTypeLabel, String fullName, String email,
                                           String company, String phone, String subject, String message) {
         String accentColor = "#2563eb";
@@ -233,6 +484,137 @@ public class EmailService {
         closeShell(html);
 
         return html.toString();
+    }
+
+    private String buildMaintenanceReportHtmlEmail(MaintenanceReportEmailContent content, String recipientName) {
+        String accentColor = "#2563eb";
+        StringBuilder html = new StringBuilder();
+        openShell(html);
+        appendHeader(html, accentColor, "&#128196;");
+
+        html.append("<tr><td style=\"padding:8px 36px 36px;\">");
+        html.append(eyebrow("#94a3b8", "Maintenance Report Ready"));
+        html.append("<p style=\"margin:6px 0 20px;color:#0f172a;font-size:19px;font-weight:700;letter-spacing:-0.01em;\">")
+            .append(escapeHtml(content.machineLabel())).append(" &mdash; Rapport #").append(content.rapportId())
+            .append("</p>");
+
+        html.append("<p style=\"margin:0 0 22px;color:#334155;font-size:14.5px;line-height:1.6;\">Hi ")
+            .append(escapeHtml(recipientName != null && !recipientName.isBlank() ? recipientName : "there"))
+            .append(", the intervention report for the rapport you just approved is attached as a PDF. A summary is below.</p>");
+
+        if (content.workPerformed() != null && !content.workPerformed().isBlank()) {
+            html.append(calloutOpen("#f8fafc", "#cbd5e1"));
+            html.append(eyebrow("#64748b", "Work Performed"));
+            html.append("<p style=\"margin:6px 0 0;color:#334155;font-size:14.5px;line-height:1.6;white-space:pre-wrap;\">")
+                .append(escapeHtml(content.workPerformed())).append("</p>");
+            html.append(calloutClose());
+        }
+
+        List<String[]> pairs = new java.util.ArrayList<>();
+        pairs.add(new String[]{"Technician", content.technicianName() != null ? content.technicianName() : "Not set"});
+        pairs.add(new String[]{"Total Cost", content.totalCostLabel() != null ? content.totalCostLabel() : "Not set"});
+        pairs.add(new String[]{"Approved By", content.approvedBy() != null ? content.approvedBy() : "Not set"});
+        pairs.add(new String[]{"Approved On", content.approvedDateLabel() != null ? content.approvedDateLabel() : "Not set"});
+        html.append(insightGrid(pairs));
+
+        if (content.actionUrl() != null && !content.actionUrl().isBlank()) {
+            html.append(ctaButton(accentColor, "View Rapport", content.actionUrl()));
+        }
+
+        html.append("</td></tr>");
+        appendFooter(html, "This is an automated notification — please do not reply to this email.");
+        closeShell(html);
+
+        return html.toString();
+    }
+
+    /**
+     * Deliberately omits work-performed detail, technician name, approver,
+     * and cost — a customer sees only that maintenance on their machine is
+     * done, not how it was billed or who touched it internally.
+     */
+    private String buildMaintenanceCompletedCustomerHtmlEmail(MaintenanceReportEmailContent content, String recipientName) {
+        String accentColor = "#059669";
+        StringBuilder html = new StringBuilder();
+        openShell(html);
+        appendHeader(html, accentColor, "&#10003;");
+
+        html.append("<tr><td style=\"padding:8px 36px 36px;\">");
+        html.append(eyebrow("#94a3b8", "Maintenance Update"));
+        html.append("<p style=\"margin:6px 0 20px;color:#0f172a;font-size:19px;font-weight:700;letter-spacing:-0.01em;\">")
+            .append(escapeHtml(content.machineLabel())).append("</p>");
+
+        html.append(calloutOpen("#ecfdf5", accentColor));
+        html.append(pill(accentColor, "COMPLETED"));
+        html.append("<p style=\"margin:10px 0 0;color:#065f46;font-size:14.5px;line-height:1.6;\">Hi ")
+            .append(escapeHtml(recipientName != null && !recipientName.isBlank() ? recipientName : "there"))
+            .append(", scheduled maintenance on ").append(escapeHtml(content.machineLabel()))
+            .append(" has been completed and signed off. No action is needed on your part.</p>");
+        html.append(calloutClose());
+
+        html.append("</td></tr>");
+        appendFooter(html, "This is an automated notification — please do not reply to this email.");
+        closeShell(html);
+
+        return html.toString();
+    }
+
+    private void sendEmailWithAttachmentInternal(String to, String subject, String body, byte[] attachmentBytes, String attachmentFilename) {
+        if (to == null || to.isBlank()) {
+            throw new IllegalArgumentException("Recipient email cannot be blank");
+        }
+        if (subject == null || subject.isBlank()) {
+            throw new IllegalArgumentException("Email subject cannot be blank");
+        }
+        if (body == null || body.isBlank()) {
+            throw new IllegalArgumentException("Email body cannot be blank");
+        }
+
+        log.info("========================================");
+        log.info("SENDING EMAIL WITH ATTACHMENT");
+        log.info("FROM       : {}", fromAddress);
+        log.info("TO         : {}", to);
+        log.info("SUBJECT    : {}", subject);
+        log.info("ATTACHMENT : {}", attachmentFilename);
+
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(
+                    mimeMessage,
+                    true,
+                    StandardCharsets.UTF_8.name()
+            );
+
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(body, true);
+            if (attachmentBytes != null && attachmentBytes.length > 0) {
+                helper.addAttachment(attachmentFilename, new ByteArrayResource(attachmentBytes));
+            }
+
+            mailSender.send(mimeMessage);
+
+            log.info("EMAIL WITH ATTACHMENT SENT SUCCESSFULLY TO '{}' WITH SUBJECT '{}'", to, subject);
+        } catch (MailException | MessagingException ex) {
+            log.error(
+                    "FAILED TO SEND EMAIL WITH ATTACHMENT TO '{}' WITH SUBJECT '{}': {}",
+                    to,
+                    subject,
+                    ex.getMessage(),
+                    ex
+            );
+        } catch (Exception ex) {
+            log.error(
+                    "UNEXPECTED EMAIL ERROR (ATTACHMENT) TO '{}' WITH SUBJECT '{}': {}",
+                    to,
+                    subject,
+                    ex.getMessage(),
+                    ex
+            );
+        }
+
+        log.info("========================================");
     }
 
     private void sendEmailInternal(String to, String subject, String body, boolean html) {
