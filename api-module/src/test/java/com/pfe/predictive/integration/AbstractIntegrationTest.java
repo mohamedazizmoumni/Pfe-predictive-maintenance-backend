@@ -7,6 +7,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.DockerClientFactory;
+import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -58,12 +60,26 @@ public abstract class AbstractIntegrationTest {
     // refused" at the gateway IP, identical whether the host was
     // auto-detected by Testcontainers or computed manually. When this env
     // var is set, Postgres joins that same named network directly and is
-    // addressed by container name instead of by published port, avoiding
-    // NAT entirely. Every other environment (a developer's machine, the
+    // addressed by network alias instead of by published port, avoiding NAT
+    // entirely. Every other environment (a developer's machine, the
     // Nexus/Vercel/Render Jenkinsfile's Docker-agent stages) leaves this
     // unset and gets Testcontainers' normal, unmodified behavior.
+    //
+    // First attempt used withNetworkMode(String) - the low-level escape
+    // hatch - and was ruled out by direct comparison: `docker run` with the
+    // identical image/network/env by hand reached "database system is ready
+    // to accept connections" in under a second, but the same config driven
+    // through withNetworkMode() made Testcontainers' own LogMessageWaitStrategy
+    // never see that line and fail after a few seconds - an interaction bug
+    // between withNetworkMode() and Testcontainers' own log-follow/wait
+    // machinery, not a Docker or Postgres problem. Wrapping the EXISTING
+    // network through Testcontainers' own Network abstraction (its normal,
+    // fully-supported path for custom networks - ordinarily used for ones it
+    // creates itself) and joining via withNetwork()+withNetworkAliases()
+    // instead keeps port publishing, log streaming, and the wait strategy on
+    // their regular, working code path.
     private static final String IT_DOCKER_NETWORK = System.getenv("IT_POSTGRES_DOCKER_NETWORK");
-    private static final String IT_POSTGRES_CONTAINER_NAME = "sentinel-it-postgres";
+    private static final String IT_POSTGRES_NETWORK_ALIAS = "sentinel-it-postgres";
 
     static final PostgreSQLContainer<?> POSTGRES = configureNetwork(
             new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
@@ -75,15 +91,25 @@ public abstract class AbstractIntegrationTest {
         if (IT_DOCKER_NETWORK == null || IT_DOCKER_NETWORK.isBlank()) {
             return container;
         }
-        // withNetworkMode is the low-level escape hatch that joins an
-        // EXISTING external network as-is, rather than Testcontainers'
-        // withNetwork(Network)/withNetworkAliases() pair, which only manages
-        // networks Testcontainers itself creates. Docker's embedded DNS on a
-        // user-defined bridge resolves by container --name, not by
-        // --hostname, so the name (not just the hostname) must be fixed here.
+        String networkId = DockerClientFactory.lazyClient()
+                .listNetworksCmd()
+                .withNameFilter(IT_DOCKER_NETWORK)
+                .exec()
+                .stream()
+                .filter(n -> IT_DOCKER_NETWORK.equals(n.getName()))
+                .findFirst()
+                .map(com.github.dockerjava.api.model.Network::getId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Docker network '" + IT_DOCKER_NETWORK + "' not found - required when IT_POSTGRES_DOCKER_NETWORK is set"));
+
+        // .id(networkId) makes this wrap the EXISTING network rather than
+        // create a new one - Network.NetworkImpl only calls Docker's
+        // create-network API lazily from getId() when no id was preset.
+        Network existingNetwork = Network.builder().id(networkId).build();
+
         return container
-                .withNetworkMode(IT_DOCKER_NETWORK)
-                .withCreateContainerCmdModifier(cmd -> cmd.withName(IT_POSTGRES_CONTAINER_NAME));
+                .withNetwork(existingNetwork)
+                .withNetworkAliases(IT_POSTGRES_NETWORK_ALIAS);
     }
 
     static {
@@ -95,7 +121,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.url", () ->
                 (IT_DOCKER_NETWORK == null || IT_DOCKER_NETWORK.isBlank())
                         ? POSTGRES.getJdbcUrl()
-                        : "jdbc:postgresql://" + IT_POSTGRES_CONTAINER_NAME + ":5432/pfe_it");
+                        : "jdbc:postgresql://" + IT_POSTGRES_NETWORK_ALIAS + ":5432/pfe_it");
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
 
