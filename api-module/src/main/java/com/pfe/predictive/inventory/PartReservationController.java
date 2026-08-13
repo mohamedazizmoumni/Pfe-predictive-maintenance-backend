@@ -46,10 +46,13 @@ public class PartReservationController {
 
     @PutMapping("/{id}/consume")
     @PreAuthorize("hasAnyRole('TECHNICIAN', 'MANAGER', 'STOCK_MANAGER', 'ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<PartReservationResponse> consume(@PathVariable Long id, Authentication authentication) {
-        PartReservationResponse response = reservationService.consume(id);
+    public ResponseEntity<PartReservationResponse> consume(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer quantityUsed,
+            Authentication authentication) {
+        PartReservationResponse response = reservationService.consume(id, quantityUsed);
         auditEventService.record(authentication.getName(), "PART_RESERVATION_CONSUMED", "Part", response.getPartId(),
-                "quantity=" + response.getQuantityReserved());
+                "quantityConsumed=" + response.getQuantityConsumed() + " of " + response.getQuantityReserved() + " reserved");
         return ResponseEntity.ok(response);
     }
 

@@ -17,6 +17,7 @@ public class PartReservationResponse {
     private Long partId;
     private String partName;
     private Integer quantityReserved;
+    private Integer quantityConsumed;
     private Long maintenanceId;
     private PartReservationStatus status;
     private String reservedBy;

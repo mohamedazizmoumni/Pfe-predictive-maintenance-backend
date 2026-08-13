@@ -14,6 +14,7 @@ import com.pfe.predictive.core.entity.PredictionHistory;
 import com.pfe.predictive.data.repository.MachineRepository;
 import com.pfe.predictive.data.repository.PredictionHistoryRepository;
 import com.pfe.predictive.data.repository.SensorTelemetryRepository;
+import com.pfe.predictive.maintenancecost.service.MaintenanceRecommendationApprovalService;
 import com.pfe.predictive.ml.dto.MlPredictionRequest;
 import com.pfe.predictive.ml.dto.MLPredictionResponse;
 import com.pfe.predictive.ml.service.MLServiceClient;
@@ -24,6 +25,7 @@ import com.pfe.predictive.telemetry.replay.model.DatasetTelemetryRow;
 import com.pfe.predictive.telemetry.replay.model.MachineTrajectoryStatus;
 import com.pfe.predictive.websocket.dto.EnrichedMachineTelemetryDto;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +48,13 @@ public class MachineStreamingService {
     private final MLServiceClient mlServiceClient;
     private final AlertService alertService;
     private final AlertDecisionEngine alertDecisionEngine;
+    private final MaintenanceRecommendationApprovalService recommendationService;
+
+    // Priority 10.4: off by default, same convention as
+    // maintenance.auto-escalation-enabled / inventory.auto-reorder-enabled.
+    // Only matters once true — see proposeMaintenanceIfSeverityWarrants().
+    @Value("${alert.auto-create-maintenance-enabled:false}")
+    private boolean autoCreateMaintenanceEnabled;
 
     public MachineStreamingService(
             MachineRepository machineRepository,
@@ -56,7 +65,8 @@ public class MachineStreamingService {
             SimpMessagingTemplate messagingTemplate,
             MLServiceClient mlServiceClient,
             AlertService alertService,
-            AlertDecisionEngine alertDecisionEngine) {
+            AlertDecisionEngine alertDecisionEngine,
+            MaintenanceRecommendationApprovalService recommendationService) {
         this.machineRepository = machineRepository;
         this.sensorTelemetryRepository = sensorTelemetryRepository;
         this.predictionHistoryRepository = predictionHistoryRepository;
@@ -66,6 +76,7 @@ public class MachineStreamingService {
         this.mlServiceClient = mlServiceClient;
         this.alertService = alertService;
         this.alertDecisionEngine = alertDecisionEngine;
+        this.recommendationService = recommendationService;
     }
 
     // Deliberately not @Transactional: processMachine() makes a blocking HTTP
@@ -190,6 +201,8 @@ public class MachineStreamingService {
                 alertService.openIncident(alertRequest, ISSUE_TYPE_SENSOR_ANOMALY, "SYSTEM_ML", context);
                 log.warn("Incident opened for machine {} — severity={}, health={}%, riskLevel={}",
                         machine.getId(), decision.severity(), health, telemetry.getRiskLevel());
+
+                proposeMaintenanceIfSeverityWarrants(machine, telemetry, decision.severity());
             } else if (activeIncident.get().getSeverity() != decision.severity()) {
                 // Incident already open and still ongoing — update in place, no email.
                 alertService.updateIncidentSeverity(
@@ -208,6 +221,58 @@ public class MachineStreamingService {
             log.info("Anomaly incident for machine {} already opened concurrently — skipping duplicate", machine.getId());
         } catch (Exception ex) {
             log.error("Failed to trigger anomaly alert for machine {}: {}", machine.getId(), ex.getMessage());
+        }
+    }
+
+    /**
+     * Priority 2: closes the AI -> alert -> maintenance loop, but stops
+     * short of creating a work order automatically — that decision stays
+     * with a manager. LOW/MEDIUM-equivalent severities (INFO/WARNING) only
+     * get the alert + notification above; HIGH/CRITICAL additionally get a
+     * PENDING MaintenanceRecommendation a manager must explicitly approve
+     * (which is what actually creates a Maintenance record — see
+     * MaintenanceRecommendationApprovalService.approve()) or reject.
+     * Isolated in its own try/catch so a failure here never affects the
+     * incident/notification that already succeeded above it.
+     *
+     * Priority 10.4: when alert.auto-create-maintenance-enabled is true
+     * (off by default), a freshly-generated recommendation for a CRITICAL
+     * alert is immediately auto-approved via the same approve() a manager
+     * would call by hand — no second work-order-creation path. Deliberately
+     * CRITICAL-only (not HIGH): this is the one severity tier where waiting
+     * for a human click is itself the risk the roadmap wants closed. A
+     * no-op recommendation (generateAndSaveIfNoPending returned empty
+     * because one is already PENDING) is never auto-approved — that PENDING
+     * one may already be mid-review by a manager.
+     */
+    private void proposeMaintenanceIfSeverityWarrants(Machine machine, EnrichedMachineTelemetryDto telemetry, AlertSeverity severity) {
+        if (severity != AlertSeverity.HIGH && severity != AlertSeverity.CRITICAL) {
+            return;
+        }
+        try {
+            double failureProbability = telemetry.getFailureProbability() != null
+                    ? Math.min(1.0, Math.max(0.0, telemetry.getFailureProbability()))
+                    : (severity == AlertSeverity.CRITICAL ? 0.9 : 0.7);
+
+            // predictedRUL follows the same hours convention as
+            // PredictionRecordDetailDTO.rulValue elsewhere in this codebase.
+            int daysUntilFailure = telemetry.getPredictedRUL() != null
+                    ? Math.max(1, (int) Math.round(telemetry.getPredictedRUL() / 24.0))
+                    : (severity == AlertSeverity.CRITICAL ? 3 : 10);
+
+            recommendationService.generateAndSaveIfNoPending(machine.getId(), failureProbability, daysUntilFailure, "SYSTEM_ML")
+                    .ifPresent(rec -> {
+                        log.info("Auto-generated maintenance recommendation id={} for machine {} (severity={})",
+                                rec.getId(), machine.getId(), severity);
+                        if (autoCreateMaintenanceEnabled && severity == AlertSeverity.CRITICAL) {
+                            var approved = recommendationService.approve(rec.getId(), "SYSTEM_ML",
+                                    "Auto-approved: CRITICAL severity alert (alert.auto-create-maintenance-enabled)");
+                            log.info("Auto-approved recommendation id={} for machine {} — maintenance id={}",
+                                    approved.getId(), machine.getId(), approved.getResultingMaintenanceId());
+                        }
+                    });
+        } catch (Exception ex) {
+            log.error("Failed to auto-generate maintenance recommendation for machine {}: {}", machine.getId(), ex.getMessage());
         }
     }
 

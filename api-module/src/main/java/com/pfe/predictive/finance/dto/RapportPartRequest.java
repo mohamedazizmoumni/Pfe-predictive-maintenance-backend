@@ -16,6 +16,10 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class RapportPartRequest {
 
+    // Set when this line came from an active PartReservation for the job
+    // (see RapportPart.partId javadoc) - null for a free-text entry.
+    private Long partId;
+
     @NotBlank(message = "Part name is required")
     private String partName;
 

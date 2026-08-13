@@ -31,4 +31,7 @@ public class ExecutiveSummaryDto {
     private BigDecimal budgetUtilizationPercentage;
     /** Worst 3 machines by MTBF — see ReliabilityService. */
     private List<MachineReliabilityDto> topReliabilityRisks;
+    /** Maintenance completed in the last 30 days, by type — see ExecutiveSummaryService. */
+    private long preventiveCompletedLast30Days;
+    private long correctiveCompletedLast30Days;
 }

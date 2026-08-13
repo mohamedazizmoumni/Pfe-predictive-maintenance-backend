@@ -34,6 +34,7 @@
         <postgresql.version>42.7.1</postgresql.version>
         <flyway.version>9.22.3</flyway.version>
         <logstash-logback.version>7.4</logstash-logback.version>
+        <testcontainers.version>1.19.7</testcontainers.version>
     </properties>
 
     <!-- Module List -->
@@ -63,6 +64,15 @@
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
                 <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Testcontainers BOM (integration tests only, see api-module) -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -213,10 +223,20 @@
                 </configuration>
             </plugin>
 
-            <!-- Failsafe Plugin for Integration Tests -->
+            <!-- Failsafe Plugin for Integration Tests (*IT.java, run on `mvn verify`,
+                 excluded from `mvn test` by the Surefire include pattern above) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.1.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- Checkstyle Plugin for Code Style -->

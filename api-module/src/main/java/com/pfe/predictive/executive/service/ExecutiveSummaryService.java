@@ -2,6 +2,7 @@ package com.pfe.predictive.executive.service;
 
 import com.pfe.predictive.core.entity.Machine;
 import com.pfe.predictive.core.entity.MaintenanceStatus;
+import com.pfe.predictive.core.entity.MaintenanceType;
 import com.pfe.predictive.core.entity.finance.ExpenseStatus;
 import com.pfe.predictive.core.entity.finance.RapportStatus;
 import com.pfe.predictive.core.entity.portal.SupportTicketStatus;
@@ -30,6 +31,7 @@ public class ExecutiveSummaryService {
 
     private static final List<MaintenanceStatus> OPEN_STATUSES = List.of(MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS);
     private static final List<SupportTicketStatus> OPEN_TICKET_STATUSES = List.of(SupportTicketStatus.OPEN, SupportTicketStatus.IN_PROGRESS);
+    private static final int MAINTENANCE_TYPE_WINDOW_DAYS = 30;
 
     private final MachineRepository machineRepository;
     private final MaintenanceRepository maintenanceRepository;
@@ -62,6 +64,11 @@ public class ExecutiveSummaryService {
                 .map(BudgetResponse::getUtilizationPercentage)
                 .orElse(null);
 
+        LocalDateTime maintenanceTypeWindowStart = LocalDateTime.now().minusDays(MAINTENANCE_TYPE_WINDOW_DAYS);
+        long preventiveCompleted = maintenanceRepository.countByTypeAndCompletedDateAfter(MaintenanceType.PREVENTIVE, maintenanceTypeWindowStart);
+        long correctiveCompleted = maintenanceRepository.countByTypeAndCompletedDateAfter(MaintenanceType.CORRECTIVE, maintenanceTypeWindowStart)
+                + maintenanceRepository.countByTypeAndCompletedDateAfter(MaintenanceType.EMERGENCY, maintenanceTypeWindowStart);
+
         return ExecutiveSummaryDto.builder()
                 .machineCount(machines.size())
                 .fleetAverageHealth(avgHealth.isPresent() ? avgHealth.getAsDouble() : null)
@@ -73,6 +80,8 @@ public class ExecutiveSummaryService {
                 .openSupportTickets(openTickets)
                 .budgetUtilizationPercentage(budgetUtilization)
                 .topReliabilityRisks(reliabilityService.getFleetReliability().stream().limit(3).toList())
+                .preventiveCompletedLast30Days(preventiveCompleted)
+                .correctiveCompletedLast30Days(correctiveCompleted)
                 .build();
     }
 }

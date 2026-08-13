@@ -1,12 +1,18 @@
 package com.pfe.predictive.finance.service;
 
 import com.pfe.predictive.audit.service.AuditEventService;
+import com.pfe.predictive.common.service.EmailService;
+import com.pfe.predictive.common.service.MaintenanceReportEmailContent;
+import com.pfe.predictive.core.entity.User;
 import com.pfe.predictive.core.entity.finance.ChecklistItem;
 import com.pfe.predictive.core.entity.finance.MaintenanceRapport;
 import com.pfe.predictive.core.entity.finance.RapportPart;
 import com.pfe.predictive.core.entity.finance.RapportStatus;
+import com.pfe.predictive.core.entity.portal.CustomerMachineLink;
 import com.pfe.predictive.data.repository.MachineRepository;
+import com.pfe.predictive.data.repository.UserRepository;
 import com.pfe.predictive.data.repository.finance.MaintenanceRapportRepository;
+import com.pfe.predictive.data.repository.portal.CustomerMachineLinkRepository;
 import com.pfe.predictive.finance.dto.ChecklistItemRequest;
 import com.pfe.predictive.finance.dto.MaintenanceRapportRequest;
 import com.pfe.predictive.finance.dto.MaintenanceRapportResponse;
@@ -14,8 +20,11 @@ import com.pfe.predictive.finance.dto.RapportApprovalRequest;
 import com.pfe.predictive.finance.dto.RapportPartRequest;
 import com.pfe.predictive.finance.mapper.MaintenanceRapportMapper;
 import com.pfe.predictive.inventory.entity.InventoryUsage;
+import com.pfe.predictive.inventory.entity.PartReservation;
 import com.pfe.predictive.inventory.repository.InventoryUsageRepository;
 import com.pfe.predictive.inventory.repository.PartRepository;
+import com.pfe.predictive.inventory.service.PartReservationService;
+import com.pfe.predictive.report.service.MaintenanceInterventionReportService;
 import com.pfe.predictive.telemetry.replay.MachineTrajectoryManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -45,12 +55,22 @@ public class MaintenanceRapportService {
     private final MachineTrajectoryManager machineTrajectoryManager;
     private final AuditEventService auditEventService;
     private final AnnualBudgetService budgetService;
+    private final PartReservationService partReservationService;
+    private final MaintenanceInterventionReportService interventionReportService;
+    private final EmailService emailService;
+    private final UserRepository userRepository;
+    private final CustomerMachineLinkRepository customerMachineLinkRepository;
 
     // No MaintenanceTemplate entity yet (see the enterprise blueprint, §09) so
     // there's no per-machine/per-category recurrence rule to consult here —
     // this is a simple fixed interval until that exists.
     @Value("${maintenance.default-recurrence-days:90}")
     private int defaultRecurrenceDays;
+
+    @Value("${app.frontend-url:http://localhost:4200}")
+    private String frontendUrl;
+
+    private static final DateTimeFormatter REPORT_EMAIL_DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a");
 
     // These list endpoints have no client-driven paging yet - cap at a
     // generous size (most recent first) instead of loading every rapport
@@ -185,6 +205,11 @@ public class MaintenanceRapportService {
                         && saved.getChecklistItems().stream().anyMatch(item -> !item.isPassed())
                         ? "machineId=" + saved.getMachineId() + "; approved despite failed checklist item(s): " + request.getReviewNote()
                         : "machineId=" + saved.getMachineId());
+
+        if (request.isApproved()) {
+            sendMaintenanceReportEmails(saved);
+        }
+
         log.info("Rapport id={} manager review complete — status={}", id, saved.getStatus());
         return rapportMapper.toResponse(saved);
     }
@@ -263,6 +288,83 @@ public class MaintenanceRapportService {
         }
     }
 
+    /**
+     * Priority 6: once a manager approves a rapport, the Priority 5 PDF
+     * intervention report is generated and emailed to that manager, and —
+     * if the machine is linked to one or more customer accounts (Customer
+     * Portal, see CustomerMachineLink) — each linked customer gets a
+     * separate sanitized "maintenance completed" notice with no PDF and no
+     * internal detail (cost, technician, work notes). Mirrors
+     * applyMaintenanceCompletionEffects: never lets an email/report failure
+     * block an approval that has already succeeded.
+     */
+    private void sendMaintenanceReportEmails(MaintenanceRapport rapport) {
+        try {
+            String machineLabel = rapport.getMachineName() != null && !rapport.getMachineName().isBlank()
+                    ? rapport.getMachineName()
+                    : "Machine #" + rapport.getMachineId();
+
+            MaintenanceReportEmailContent content = new MaintenanceReportEmailContent(
+                    rapport.getId(),
+                    machineLabel,
+                    rapport.getMachineId(),
+                    rapport.getWorkPerformed(),
+                    rapport.getTechnicianName() != null && !rapport.getTechnicianName().isBlank()
+                            ? rapport.getTechnicianName() : rapport.getTechnicianUsername(),
+                    rapport.getApprovedByManager(),
+                    rapport.getManagerApprovedDate() != null ? rapport.getManagerApprovedDate().format(REPORT_EMAIL_DATE_FORMAT) : null,
+                    rapport.getTotalCost() != null ? rapport.getTotalCost().toPlainString() + " TND" : null,
+                    reportActionUrl()
+            );
+
+            if (rapport.getApprovedByManager() != null && !rapport.getApprovedByManager().isBlank()) {
+                userRepository.findByUsername(rapport.getApprovedByManager()).ifPresentOrElse(manager -> {
+                    if (manager.getEmail() != null && !manager.getEmail().isBlank()) {
+                        byte[] pdf = interventionReportService.generate(rapport.getId());
+                        emailService.sendMaintenanceReportEmail(manager.getEmail(), displayName(manager), content, pdf);
+                    } else {
+                        log.warn("Rapport id={} approved by '{}' but that user has no email on file — skipping manager report email",
+                                rapport.getId(), rapport.getApprovedByManager());
+                    }
+                }, () -> log.warn("Rapport id={} approved but reviewer '{}' has no matching user account — skipping manager report email",
+                        rapport.getId(), rapport.getApprovedByManager()));
+            }
+
+            if (rapport.getMachineId() != null) {
+                for (CustomerMachineLink link : customerMachineLinkRepository.findByMachineId(rapport.getMachineId())) {
+                    userRepository.findById(link.getUserId()).ifPresent(customer -> {
+                        if (customer.getEmail() != null && !customer.getEmail().isBlank()) {
+                            emailService.sendMaintenanceCompletedCustomerNotification(customer.getEmail(), displayName(customer), content);
+                        }
+                    });
+                }
+            }
+        } catch (Exception ex) {
+            // Same rationale as applyMaintenanceCompletionEffects: the approval
+            // itself already succeeded and was already saved/audited above —
+            // a report-generation or email problem must not roll that back.
+            log.error("Failed to send maintenance report email(s) for rapport {}: {}", rapport.getId(), ex.getMessage(), ex);
+        }
+    }
+
+    private String displayName(User user) {
+        if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) {
+            return user.getDisplayName();
+        }
+        if (user.getFirstName() != null && !user.getFirstName().isBlank()) {
+            return user.getFirstName();
+        }
+        return user.getUsername();
+    }
+
+    private String reportActionUrl() {
+        String base = frontendUrl != null && !frontendUrl.isBlank() ? frontendUrl.trim() : "http://localhost:4200";
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + "/finance/rapports";
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // HELPERS
     // ─────────────────────────────────────────────────────────────────────────
@@ -278,6 +380,7 @@ public class MaintenanceRapportService {
     private RapportPart toPart(RapportPartRequest request) {
         BigDecimal total = request.getUnitCost().multiply(BigDecimal.valueOf(request.getQuantity()));
         return RapportPart.builder()
+                .partId(request.getPartId())
                 .partName(request.getPartName())
                 .partCode(request.getPartCode())
                 .quantity(request.getQuantity())
@@ -320,20 +423,55 @@ public class MaintenanceRapportService {
     }
 
     /**
-     * Decrements stock and logs real usage for each rapport part that matches an
-     * existing catalog part by name. Parts that don't match a known catalog entry
-     * are left alone — this only records consumption we can attribute with confidence.
+     * Decrements stock and logs real usage for each rapport part. Two paths,
+     * tried in order per line:
+     *
+     * 1. Reservation-backed (part.getPartId() != null): consume the active
+     *    PartReservation(s) held for this job (rapport.getTaskId() — despite
+     *    the name, this is a Maintenance id in the technician-completion flow
+     *    that produces these rapports, the same id PartReservation.maintenanceId
+     *    uses) and this part, oldest first, up to the quantity actually used.
+     *    PartReservationService.consume() does the real stock decrement, so
+     *    nothing further happens here for the covered quantity — doing a
+     *    second decrement would double-count it.
+     * 2. Name-match fallback (no partId, or the reservation(s) didn't cover
+     *    the full quantity — e.g. more was used than was reserved): decrement
+     *    the catalog part matched by name for whatever quantity path 1 didn't
+     *    already cover. This is the original, still-supported behavior for
+     *    free-text part entries.
+     *
+     * restorePartUsage() below doesn't need to know which path a line took —
+     * it just adds the same total quantity back to the one shared
+     * Part.currentStock row, which is correct regardless of how it was drained.
      */
     private void recordPartUsage(MaintenanceRapport rapport, String technicianUsername) {
         for (RapportPart part : rapport.getParts()) {
+            int remaining = part.getQuantity();
+
+            if (part.getPartId() != null) {
+                for (PartReservation reservation : partReservationService.findActiveReservations(rapport.getTaskId(), part.getPartId())) {
+                    if (remaining <= 0) {
+                        break;
+                    }
+                    int consumeNow = Math.min(remaining, reservation.getQuantityReserved());
+                    partReservationService.consume(reservation.getId(), consumeNow);
+                    remaining -= consumeNow;
+                }
+            }
+
+            if (remaining <= 0) {
+                continue;
+            }
+
+            final int uncoveredQuantity = remaining;
             partRepository.findByNameIgnoreCase(part.getPartName()).ifPresent(catalogPart -> {
                 Integer currentStock = catalogPart.getCurrentStock();
-                catalogPart.setCurrentStock(Math.max(0, (currentStock == null ? 0 : currentStock) - part.getQuantity()));
+                catalogPart.setCurrentStock(Math.max(0, (currentStock == null ? 0 : currentStock) - uncoveredQuantity));
                 partRepository.save(catalogPart);
 
                 InventoryUsage usage = InventoryUsage.builder()
                         .part(catalogPart)
-                        .quantityUsed(part.getQuantity())
+                        .quantityUsed(uncoveredQuantity)
                         .taskId(rapport.getTaskId())
                         .reason("Maintenance rapport #" + rapport.getId())
                         .usedBy(technicianUsername)

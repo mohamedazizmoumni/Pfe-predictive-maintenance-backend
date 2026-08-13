@@ -1,6 +1,7 @@
 package com.pfe.predictive.maintenance.controller;
 
 import com.pfe.predictive.audit.service.AuditEventService;
+import com.pfe.predictive.common.service.AssignmentEmailContent;
 import com.pfe.predictive.common.service.EmailService;
 import com.pfe.predictive.core.entity.Maintenance;
 import com.pfe.predictive.core.entity.MaintenancePriority;
@@ -14,12 +15,14 @@ import com.pfe.predictive.maintenance.dto.MaintenanceDto;
 import com.pfe.predictive.maintenance.dto.MaintenancePageResponse;
 import com.pfe.predictive.maintenance.mapper.MaintenanceMapper;
 import com.pfe.predictive.common.exception.ResourceNotFoundException;
+import com.pfe.predictive.inventory.service.PartReservationService;
 import com.pfe.predictive.security.PermissionConstants;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,22 +40,30 @@ import java.util.Objects;
 @RequestMapping("/api/v1/maintenance")
 public class MaintenanceController {
 
+    private static final String DEFAULT_FRONTEND_URL = "http://localhost:4200";
+
     private final MaintenanceRepository maintenanceRepository;
     private final MachineRepository machineRepository;
     private final EmailService emailService;
     private final UserRepository userRepository;
     private final AuditEventService auditEventService;
+    private final PartReservationService partReservationService;
+
+    @Value("${app.frontend-url:" + DEFAULT_FRONTEND_URL + "}")
+    private String frontendUrl;
 
     public MaintenanceController(MaintenanceRepository maintenanceRepository,
                                  MachineRepository machineRepository,
                                  EmailService emailService,
                                  UserRepository userRepository,
-                                 AuditEventService auditEventService) {
+                                 AuditEventService auditEventService,
+                                 PartReservationService partReservationService) {
         this.maintenanceRepository = maintenanceRepository;
         this.machineRepository = machineRepository;
         this.emailService = emailService;
         this.userRepository = userRepository;
         this.auditEventService = auditEventService;
+        this.partReservationService = partReservationService;
     }
 
     @PostMapping
@@ -187,6 +198,7 @@ public class MaintenanceController {
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
         maintenance.setStatus(MaintenanceStatus.CANCELLED);
         Maintenance cancelled = maintenanceRepository.save(maintenance);
+        partReservationService.releaseAllForMaintenance(cancelled.getId());
         auditEventService.record("MAINTENANCE_CANCELLED", "Maintenance", cancelled.getId(), null);
         return ResponseEntity.ok(MaintenanceMapper.toDto(cancelled));
     }
@@ -230,6 +242,13 @@ public class MaintenanceController {
         if (previousStatus != saved.getStatus()) {
             auditEventService.record("MAINTENANCE_STATUS_CHANGED", "Maintenance", saved.getId(),
                     previousStatus + " -> " + saved.getStatus());
+            // The frontend drives cancellation through this generic endpoint,
+            // not just POST /{id}/cancel above - release any parts still
+            // held for a job that's no longer going ahead, wherever the
+            // CANCELLED transition came from.
+            if (saved.getStatus() == MaintenanceStatus.CANCELLED) {
+                partReservationService.releaseAllForMaintenance(saved.getId());
+            }
         }
 
         return ResponseEntity.ok(MaintenanceMapper.toDto(saved));
@@ -240,6 +259,7 @@ public class MaintenanceController {
     public ResponseEntity<Void> deleteMaintenance(@PathVariable Long id) {
         Maintenance maintenance = maintenanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance not found with id " + id));
+        partReservationService.releaseAllForMaintenance(id);
         maintenanceRepository.delete(maintenance);
         auditEventService.record("MAINTENANCE_DELETED", "Maintenance", id, null);
         return ResponseEntity.noContent().build();
@@ -264,44 +284,41 @@ public class MaintenanceController {
             if (recipientName == null || recipientName.isBlank()) recipientName = technician.getUsername();
             if (recipientName == null || recipientName.isBlank()) recipientName = "Technician";
 
-            String subject = "New Maintenance Task Assigned — #" + maintenance.getId();
-
-            String body = """
-                    Hello %s,
-
-                    A new maintenance task has been assigned to you.
-
-                    ══════════════════════════════════════════
-                    TASK DETAILS
-                    ══════════════════════════════════════════
-
-                    Task ID        : %d
-                    Machine ID     : %d
-                    Type           : %s
-                    Priority       : %s
-                    Status         : %s
-                    Scheduled Date : %s
-
-                    Please log in to the Predictive Maintenance Platform
-                    to review and manage this task.
-
-                    Best regards,
-                    Predictive Maintenance System
-                    """.formatted(
+            AssignmentEmailContent content = new AssignmentEmailContent(
                     recipientName,
+                    "Maintenance Work Order",
                     maintenance.getId(),
+                    maintenance.getType() != null ? maintenance.getType().toString() : null,
+                    maintenance.getDescription(),
+                    maintenance.getPriority() != null ? maintenance.getPriority().toString() : null,
+                    maintenance.getStatus() != null ? maintenance.getStatus().toString() : null,
                     maintenance.getMachineId(),
-                    maintenance.getType(),
-                    maintenance.getPriority(),
-                    maintenance.getStatus(),
-                    maintenance.getScheduledDate()
+                    "Scheduled Date",
+                    formatScheduledDate(maintenance.getScheduledDate()),
+                    null,
+                    buildMaintenanceUrl(maintenance.getId()),
+                    "View Work Order"
             );
 
-            emailService.sendSimpleEmail(technician.getEmail(), subject, body);
+            emailService.sendAssignmentNotification(technician.getEmail(), content);
 
         } catch (Exception ex) {
             log.error("Failed to send maintenance assignment email for task #{}", maintenance.getId(), ex);
         }
+    }
+
+    private String formatScheduledDate(java.time.LocalDateTime scheduledDate) {
+        return scheduledDate != null
+                ? scheduledDate.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a"))
+                : null;
+    }
+
+    private String buildMaintenanceUrl(Long maintenanceId) {
+        String baseUrl = frontendUrl == null || frontendUrl.isBlank() ? DEFAULT_FRONTEND_URL : frontendUrl.trim();
+        while (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        return baseUrl + "/maintenance/" + maintenanceId;
     }
 
     private MaintenanceStatus parseStatus(String status) {

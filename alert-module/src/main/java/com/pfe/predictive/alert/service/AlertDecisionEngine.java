@@ -1,6 +1,7 @@
 package com.pfe.predictive.alert.service;
 
 import com.pfe.predictive.alert.entity.AlertSeverity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
@@ -14,11 +15,33 @@ import java.util.stream.Collectors;
  * the message additionally weaves in the specific detected anomaly/failure
  * mode from the same snapshot, so two incidents of the same severity don't
  * read as identical form letters.
+ *
+ * <p>Thresholds are externalized (alert.severity.*, defaults unchanged from
+ * the original hardcoded values) so the LOW/MEDIUM/HIGH/CRITICAL boundary
+ * can be tuned per deployment without a code change — see application.yml.
  */
 @Service
 public class AlertDecisionEngine {
 
     private static final Set<String> UNINFORMATIVE_LABELS = Set.of("NONE", "UNKNOWN", "GENERAL_DEGRADATION");
+
+    // Field initializers double as the value plain `new AlertDecisionEngine()`
+    // gets outside a Spring context (e.g. AlertDecisionEngineTest, a fast
+    // dependency-free unit test) — @Value only runs during Spring bean
+    // construction, so it overwrites these with the resolved property value
+    // (same number by default) when this is actually built as a bean, and
+    // never touches them otherwise. Keep both in sync if the default changes.
+    @Value("${alert.severity.critical-health-threshold:30.0}")
+    private double criticalHealthThreshold = 30.0;
+
+    @Value("${alert.severity.high-health-threshold:40.0}")
+    private double highHealthThreshold = 40.0;
+
+    @Value("${alert.severity.warning-health-threshold:50.0}")
+    private double warningHealthThreshold = 50.0;
+
+    @Value("${alert.severity.warning-anomaly-probability-threshold:0.8}")
+    private double warningAnomalyProbabilityThreshold = 0.8;
 
     public AlertDecision decide(AlertDecisionInput input) {
         AlertSeverity severity = determineSeverity(input);
@@ -31,16 +54,16 @@ public class AlertDecisionEngine {
     private AlertSeverity determineSeverity(AlertDecisionInput input) {
         double health = input.health();
 
-        if (health <= 30.0
+        if (health <= criticalHealthThreshold
                 || input.requiresImmediateAction()
                 || "CRITICAL".equalsIgnoreCase(input.riskLevel())) {
             return AlertSeverity.CRITICAL;
         }
-        if (health <= 40.0) {
+        if (health <= highHealthThreshold) {
             return AlertSeverity.HIGH;
         }
-        if (health <= 50.0
-                || (input.anomalyProbability() != null && input.anomalyProbability() > 0.8)) {
+        if (health <= warningHealthThreshold
+                || (input.anomalyProbability() != null && input.anomalyProbability() > warningAnomalyProbabilityThreshold)) {
             return AlertSeverity.WARNING;
         }
         return AlertSeverity.INFO;

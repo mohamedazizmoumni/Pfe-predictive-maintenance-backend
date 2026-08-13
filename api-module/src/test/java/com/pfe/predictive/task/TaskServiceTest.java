@@ -1,5 +1,6 @@
 package com.pfe.predictive.task;
 
+import com.pfe.predictive.common.service.AssignmentEmailContent;
 import com.pfe.predictive.common.service.EmailService;
 import com.pfe.predictive.core.entity.Task;
 import com.pfe.predictive.core.entity.User;
@@ -115,7 +116,7 @@ class TaskServiceTest {
         TaskRequest request = TaskRequest.builder().title("Fix pump").dueDate(LocalDateTime.now()).build();
         service.createTask(request);
 
-        verify(emailService, never()).sendHtmlEmail(anyString(), anyString(), anyString());
+        verify(emailService, never()).sendAssignmentNotification(anyString(), any(AssignmentEmailContent.class));
     }
 
     @Test
@@ -133,7 +134,7 @@ class TaskServiceTest {
         TaskRequest request = TaskRequest.builder().title("Fix pump").assignedTechnicianId(5L).dueDate(LocalDateTime.now()).build();
         service.createTask(request);
 
-        verify(emailService, never()).sendHtmlEmail(anyString(), anyString(), anyString());
+        verify(emailService, never()).sendAssignmentNotification(anyString(), any(AssignmentEmailContent.class));
     }
 
     @Test
@@ -148,7 +149,7 @@ class TaskServiceTest {
         TaskRequest request = TaskRequest.builder().title("Fix pump").assignedTechnicianId(5L).dueDate(LocalDateTime.now()).build();
         service.createTask(request);
 
-        verify(emailService, never()).sendHtmlEmail(anyString(), anyString(), anyString());
+        verify(emailService, never()).sendAssignmentNotification(anyString(), any(AssignmentEmailContent.class));
     }
 
     @Test
@@ -166,7 +167,7 @@ class TaskServiceTest {
         TaskRequest request = TaskRequest.builder().title("Fix pump").assignedTechnicianId(5L).dueDate(LocalDateTime.now()).build();
         service.createTask(request);
 
-        verify(emailService, never()).sendHtmlEmail(anyString(), anyString(), anyString());
+        verify(emailService, never()).sendAssignmentNotification(anyString(), any(AssignmentEmailContent.class));
     }
 
     @Test
@@ -185,7 +186,7 @@ class TaskServiceTest {
         TaskRequest request = TaskRequest.builder().title("Fix pump").assignedTechnicianId(5L).dueDate(LocalDateTime.now()).build();
         service.createTask(request);
 
-        verify(emailService, times(1)).sendHtmlEmail(eq("jane@sentinel.io"), anyString(), anyString());
+        verify(emailService, times(1)).sendAssignmentNotification(eq("jane@sentinel.io"), any(AssignmentEmailContent.class));
     }
 
     // ------------------------------------------------------------------
@@ -215,7 +216,7 @@ class TaskServiceTest {
         TaskRequest request = TaskRequest.builder().assignedTechnicianId(5L).build();
         service.updateTask(1L, request);
 
-        verify(emailService, never()).sendHtmlEmail(anyString(), anyString(), anyString());
+        verify(emailService, never()).sendAssignmentNotification(anyString(), any(AssignmentEmailContent.class));
     }
 
     @Test
@@ -232,7 +233,7 @@ class TaskServiceTest {
         TaskRequest request = TaskRequest.builder().assignedTechnicianId(9L).build();
         service.updateTask(1L, request);
 
-        verify(emailService, times(1)).sendHtmlEmail(eq("bob@sentinel.io"), anyString(), anyString());
+        verify(emailService, times(1)).sendAssignmentNotification(eq("bob@sentinel.io"), any(AssignmentEmailContent.class));
     }
 
     @Test
