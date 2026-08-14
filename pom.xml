@@ -263,6 +263,35 @@
                     </excludes>
                 </configuration>
             </plugin>
+
+            <!-- JaCoCo: without this, SonarQube gets no coverage data at all
+                 (confirmed: 0.0% coverage across all 11,473 lines project-wide,
+                 not just new code - there was no jacoco-maven-plugin anywhere in
+                 the reactor). prepare-agent attaches the coverage javaagent to
+                 every module's surefire/failsafe JVM; report generates
+                 target/site/jacoco/jacoco.xml per module right after unit tests
+                 run, which sonar-maven-plugin auto-detects at that default path
+                 with no extra sonar.coverage.jacoco.xmlReportPaths needed. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
 
         <!-- Plugin Management -->
