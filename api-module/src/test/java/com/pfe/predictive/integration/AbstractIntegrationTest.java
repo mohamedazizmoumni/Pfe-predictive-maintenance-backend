@@ -12,6 +12,8 @@ import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.time.Duration;
+
 /**
  * Base class for *IT.java integration tests. Boots the full Spring context on a
  * random port against a real Postgres container (Testcontainers) so Flyway runs
@@ -81,11 +83,22 @@ public abstract class AbstractIntegrationTest {
     private static final String IT_DOCKER_NETWORK = System.getenv("IT_POSTGRES_DOCKER_NETWORK");
     private static final String IT_POSTGRES_NETWORK_ALIAS = "sentinel-it-postgres";
 
+    // Default Testcontainers startup wait is 60s - confirmed (in CI, via
+    // exact "ContainerLaunchException: Timed out waiting for log output
+    // matching '.*database system is ready to accept connections.*'"
+    // errors) that this is too tight on the WSL2/Docker-outside-of-Docker
+    // host this pipeline runs on, intermittently: host resources, stale
+    // containers, disk space, and Docker network aliasing were all checked
+    // and ruled out as the cause, so this looks like plain occasional slow-
+    // start overhead in this specific environment - the same class of
+    // problem already solved once for the ML service's own cold-start
+    // health check by giving it a much longer retry budget.
     static final PostgreSQLContainer<?> POSTGRES = configureNetwork(
             new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
                     .withDatabaseName("pfe_it")
                     .withUsername("pfe_it")
-                    .withPassword("pfe_it"));
+                    .withPassword("pfe_it")
+                    .withStartupTimeout(Duration.ofMinutes(3)));
 
     private static PostgreSQLContainer<?> configureNetwork(PostgreSQLContainer<?> container) {
         if (IT_DOCKER_NETWORK == null || IT_DOCKER_NETWORK.isBlank()) {
