@@ -1,0 +1,803 @@
+classDiagram
+direction LR
+
+%% Core - securite
+class User {
+  +Long id
+  +String username
+  +String email
+  +String password
+  +String firstName
+  +String lastName
+  +String department
+  +UserStatus status
+  +Boolean mfaEnabled
+  +boolean locked
+  +boolean faceEnrolled
+  +LocalDateTime lastLoginAt
+}
+class Role {
+  +Long id
+  +String name
+  +String description
+}
+class Permission {
+  +Long id
+  +String name
+  +String description
+}
+class UserPreference {
+  +Long id
+  +Long userId
+  +String prefKey
+  +String prefValue
+}
+class UserStatus {
+  <<enumeration>>
+  ACTIVE
+  INACTIVE
+  LOCKED
+  PENDING
+}
+class UserRole {
+  <<enumeration>>
+  ADMIN
+  MANAGER
+  TECHNICIAN
+  STOCK_MANAGER
+  FINANCE_MANAGER
+  CUSTOMER
+}
+
+%% Core - machines et telemetrie
+class CoreMachine {
+  +Long id
+  +String serialNumber
+  +String name
+  +String model
+  +String manufacturer
+  +String location
+  +String category
+  +String status
+  +String photoPath
+  +LocalDateTime installationDate
+  +LocalDateTime lastMaintenanceDate
+  +LocalDateTime nextMaintenanceDate
+  +Double operatingHours
+  +Double riskScore
+}
+class Sensor {
+  +Long id
+  +String code
+  +String name
+  +String type
+  +String unit
+  +Double minRange
+  +Double maxRange
+  +String status
+  +LocalDateTime lastReadingTime
+  +Double lastReadingValue
+}
+class SensorData {
+  +Long id
+  +Double value
+  +String unit
+  +LocalDateTime recordedDate
+  +Boolean isAnomaly
+  +Long version
+}
+class SensorTelemetry {
+  +Long id
+  +Long machineId
+  +LocalDateTime timestamp
+  +Double setting1
+  +Double setting2
+  +Double setting3
+  +Double sensor1To21
+}
+class EnvironmentalTelemetry {
+  +Long id
+  +Double temperature
+  +Double humidity
+  +String riskLevel
+  +LocalDateTime timestamp
+}
+class MachineEvent {
+  +Long id
+  +Long machineId
+  +String eventType
+  +LocalDateTime eventTimestamp
+  +String severity
+  +String sensorName
+  +Double sensorValue
+  +Double thresholdValue
+  +boolean acknowledged
+  +String acknowledgedBy
+}
+class MachineSimulationState {
+  +Long id
+  +Long machineId
+  +Double health
+  +Double bearingWear
+  +Double thermalStress
+  +Double lubricationLevel
+  +Double fatigueIndex
+  +Double efficiencyScore
+  +Long operatingHours
+  +Double ambientTemperature
+  +Double loadFactor
+  +Double operatingSpeed
+}
+class MachineStatus {
+  <<enumeration>>
+  OPERATIONAL
+  WARNING
+  CRITICAL
+  OFFLINE
+  MAINTENANCE
+}
+class RiskLevel {
+  <<enumeration>>
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+%% Core - maintenance
+class Maintenance {
+  +Long id
+  +Long machineId
+  +MaintenanceType type
+  +MaintenancePriority priority
+  +String description
+  +MaintenanceStatus status
+  +LocalDateTime scheduledDate
+  +LocalDateTime startDate
+  +LocalDateTime completedDate
+  +Integer estimatedDuration
+  +Long assignedTechnicianId
+  +String approvedBy
+  +String notes
+  +String rootCause
+}
+class CoreTask {
+  +Long id
+  +String title
+  +String description
+  +String status
+  +String priority
+  +Long machineId
+  +Long maintenanceId
+  +String assignedTo
+  +LocalDateTime dueDate
+  +LocalDateTime completedDate
+}
+class MaintenanceRecommendation {
+  +Long id
+  +Long machineId
+  +String urgencyLevel
+  +String recommendedAction
+  +String justification
+  +BigDecimal estimatedCost
+  +BigDecimal estimatedSavings
+  +Double failureProbability
+  +Integer daysUntilFailure
+  +MaintenanceRecommendationStatus status
+  +Long resultingMaintenanceId
+}
+class MachineTechnicianAssignment {
+  +Long id
+  +LocalDateTime assignedAt
+}
+class WorkOrderTemplate {
+  +Long id
+  +String name
+  +String description
+  +MaintenanceType type
+  +MaintenancePriority priority
+  +Integer estimatedDuration
+  +boolean active
+  +String createdBy
+}
+class RecurringMaintenanceRule {
+  +Long id
+  +Long machineId
+  +Long workOrderTemplateId
+  +Integer intervalDays
+  +Long assignedTechnicianId
+  +LocalDateTime nextRunDate
+  +Long lastGeneratedMaintenanceId
+  +boolean active
+}
+class MaintenanceType {
+  <<enumeration>>
+  PREVENTIVE
+  CORRECTIVE
+  PREDICTIVE
+  EMERGENCY
+}
+class MaintenancePriority {
+  <<enumeration>>
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+class MaintenanceStatus {
+  <<enumeration>>
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  PENDING_APPROVAL
+}
+class MaintenanceRecommendationStatus {
+  <<enumeration>>
+  PENDING
+  APPROVED
+  REJECTED
+  EXECUTED
+}
+
+%% Predictions et alertes
+class PredictionRecord {
+  +Long id
+  +Long machineId
+  +LocalDateTime predictedAt
+  +Double rulValue
+  +Double confidenceLow
+  +Double confidenceHigh
+  +RiskLevel riskLevel
+  +String modelVersion
+  +String triggeredBy
+}
+class PredictionHistory {
+  +Long id
+  +Long machineId
+  +LocalDateTime timestamp
+  +Double health
+  +Double riskScore
+  +Double remainingUsefulLife
+  +Double bearingWear
+  +Double thermalStress
+  +Double lubricationLevel
+  +Double fatigueIndex
+  +Double efficiencyScore
+  +Double temperature
+  +Double vibration
+  +Double powerConsumption
+  +Double pressure
+  +Double current
+  +Double voltage
+  +Double predictedRUL
+  +Double anomalyProbability
+  +Double failureProbability
+  +String predictedFailureType
+  +String recommendedAction
+  +Boolean requiresImmediateAction
+}
+class Alert {
+  +Long id
+  +Long machineId
+  +String title
+  +String message
+  +AlertSeverity severity
+  +AlertStatus status
+  +AlertCategory category
+  +String sourceReference
+  +Boolean viewed
+  +String assignedTo
+  +String acknowledgedBy
+  +String escalationNotes
+  +String resolutionNotes
+  +Double healthScore
+  +Double predictedRUL
+  +Double anomalyProbability
+  +Double failureProbability
+  +String predictedFailureType
+}
+class AlertSeverity {
+  <<enumeration>>
+  INFO
+  WARNING
+  HIGH
+  CRITICAL
+}
+class AlertStatus {
+  <<enumeration>>
+  NEW
+  ACKNOWLEDGED
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+class AlertCategory {
+  <<enumeration>>
+  PREDICTIVE
+  ANOMALY
+  SENSOR
+  MAINTENANCE
+  SYSTEM
+}
+
+%% Finance
+class AnnualBudget {
+  +Long id
+  +Integer year
+  +BigDecimal totalBudget
+  +BigDecimal spentAmount
+  +BigDecimal remainingBudget
+  +BigDecimal utilizationPercentage
+  +String notes
+}
+class ExpenseReport {
+  +Long id
+  +String title
+  +String description
+  +BigDecimal amount
+  +ExpenseCategory category
+  +Long machineId
+  +Long maintenanceTaskId
+  +Long submittedBy
+  +ExpenseStatus status
+  +Long reviewedBy
+  +String reviewNotes
+}
+class MaintenanceRapport {
+  +Long id
+  +Long taskId
+  +Long machineId
+  +String machineName
+  +String technicianName
+  +String title
+  +String workPerformed
+  +Double laborHours
+  +BigDecimal laborCost
+  +BigDecimal partsCost
+  +BigDecimal totalCost
+  +RapportStatus status
+  +String approvedBy
+}
+class RapportPart {
+  <<value object>>
+  +Long partId
+  +String partName
+  +String partCode
+  +Integer quantity
+  +BigDecimal unitCost
+  +BigDecimal totalCost
+}
+class ChecklistItem {
+  <<value object>>
+  +String description
+  +boolean passed
+  +String notes
+}
+class ExpenseCategory {
+  <<enumeration>>
+  PARTS
+  LABOR
+  EQUIPMENT
+  SERVICES
+  OTHER
+}
+class ExpenseStatus {
+  <<enumeration>>
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+}
+class RapportStatus {
+  <<enumeration>>
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+%% Inventaire
+class Category {
+  +Long id
+  +String name
+}
+class Part {
+  +Long id
+  +String partNumber
+  +String name
+  +String description
+  +String category
+  +String subCategory
+  +BigDecimal cost
+  +Integer currentStock
+  +Integer minimumStock
+  +Integer reorderQuantity
+  +String supplier
+  +PartStatus status
+}
+class PartReservation {
+  +Long id
+  +Long partId
+  +Integer quantityReserved
+  +Integer quantityConsumed
+  +Long maintenanceId
+  +PartReservationStatus status
+  +Long reservedBy
+}
+class InventoryUsage {
+  +Long id
+  +Integer quantityUsed
+  +Long taskId
+  +String reason
+  +Long usedBy
+  +LocalDateTime usedDate
+}
+class ReorderRequest {
+  +Long id
+  +Integer quantity
+  +ReorderStatus status
+  +String reason
+  +Long requestedBy
+  +Long approvedBy
+  +LocalDateTime createdAt
+}
+class StockOrder {
+  +Long id
+  +Integer quantity
+  +BigDecimal cost
+  +StockOrderStatus status
+  +String orderNumber
+  +LocalDate deliveryDate
+  +LocalDate orderedDate
+}
+class Supplier {
+  +Long id
+  +String name
+  +String contactName
+  +String email
+  +String phone
+  +String address
+  +Integer leadTimeDays
+  +boolean active
+}
+class PartStatus {
+  <<enumeration>>
+  AVAILABLE
+  LOW_STOCK
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+class PartReservationStatus {
+  <<enumeration>>
+  RESERVED
+  PARTIALLY_CONSUMED
+  CONSUMED
+  CANCELLED
+}
+class ReorderStatus {
+  <<enumeration>>
+  REQUESTED
+  APPROVED
+  REJECTED
+  ORDERED
+  COMPLETED
+}
+class StockOrderStatus {
+  <<enumeration>>
+  PENDING
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+%% Portail client et objets transverses
+class CustomerMachineLink {
+  +Long id
+  +Long userId
+  +Long machineId
+  +String linkedBy
+  +LocalDateTime createdAt
+}
+class Warranty {
+  +Long id
+  +Long machineId
+  +String provider
+  +LocalDate startDate
+  +LocalDate endDate
+  +String terms
+}
+class Invoice {
+  +Long id
+  +Long customerUserId
+  +Long machineId
+  +String invoiceNumber
+  +BigDecimal amount
+  +InvoiceStatus status
+  +LocalDate issueDate
+  +LocalDate dueDate
+}
+class SupportTicket {
+  +Long id
+  +Long customerUserId
+  +Long machineId
+  +String subject
+  +String description
+  +SupportTicketStatus status
+  +Long assignedTo
+  +String resolutionNotes
+  +LocalDateTime resolvedAt
+}
+class PortalMessage {
+  +Long id
+  +Long ticketId
+  +String senderUsername
+  +boolean fromCustomer
+  +String body
+  +LocalDateTime createdAt
+}
+class InvoiceStatus {
+  <<enumeration>>
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+class SupportTicketStatus {
+  <<enumeration>>
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+class Attachment {
+  +Long id
+  +String entityType
+  +Long entityId
+  +String fileName
+  +String storedFileName
+  +String contentType
+  +Long fileSize
+  +Long uploadedBy
+}
+class Comment {
+  +Long id
+  +String entityType
+  +Long entityId
+  +String authorUsername
+  +String body
+}
+class AuditEvent {
+  +Long id
+  +String actor
+  +String action
+  +String entityType
+  +Long entityId
+  +String details
+}
+
+%% API et cout de maintenance
+class TaskEntity {
+  +Long id
+  +String title
+  +String description
+  +String status
+  +String priority
+  +Long machineId
+  +Long maintenanceId
+  +String assignedTo
+  +LocalDateTime dueDate
+  +LocalDateTime completedDate
+}
+class CalendarEvent {
+  +Long id
+  +String title
+  +String description
+  +LocalDateTime startTime
+  +LocalDateTime endTime
+  +String eventType
+  +Long assignedTo
+  +String status
+  +String priority
+  +Long machineId
+  +Long taskId
+  +Boolean isAllDay
+  +Boolean isRecurring
+  +String recurrencePattern
+}
+class MachineFailureReport {
+  +Long id
+  +Long machineId
+  +String machineName
+  +String currentSensorState
+  +Integer predictedFailureDays
+  +Double risk
+  +String recommendedAction
+  +BigDecimal estimatedCost
+}
+class MachineFailureReportPart {
+  +Long id
+  +Long partId
+  +String partName
+  +Integer quantityNeeded
+  +Integer currentStock
+  +Integer minimumStock
+}
+class PredictiveActionAudit {
+  +Long id
+  +Long machineId
+  +String actionType
+  +String details
+  +String actor
+  +LocalDateTime createdAt
+}
+class CostMachine {
+  +Long id
+  +Long machineId
+  +String name
+  +String location
+  +MachineStatus status
+  +BigDecimal hourlyProductionValue
+  +BigDecimal replacementCost
+  +CriticalityLevel criticalityLevel
+  +Integer age
+}
+class FailureEvent {
+  +Long id
+  +String failureType
+  +Double actualDowntimeHours
+  +BigDecimal totalCostIncurred
+  +LocalDateTime occurredAt
+}
+class MaintenanceAction {
+  +Long id
+  +MaintenanceActionType type
+  +Double estimatedDurationHours
+  +BigDecimal laborCostPerHour
+  +MaintenanceActionStatus status
+  +LocalDateTime scheduledDate
+}
+class MaintenancePart {
+  +Long id
+  +String name
+  +String referenceCode
+  +BigDecimal unitCost
+  +Integer stockQuantity
+  +Integer leadTimeDays
+}
+class MaintenanceBudget {
+  +Long id
+  +String department
+  +String period
+  +BigDecimal allocatedAmount
+  +BigDecimal spentAmount
+  +BigDecimal remainingAmount
+}
+class CriticalityLevel {
+  <<enumeration>>
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+class MaintenanceActionType {
+  <<enumeration>>
+  PREVENTIVE
+  CORRECTIVE
+  PREDICTIVE
+}
+class MaintenanceActionStatus {
+  <<enumeration>>
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+%% NLP et notifications
+class Notification {
+  +Long id
+  +Long machineId
+  +String title
+  +String body
+  +RiskLevel riskLevel
+  +Long predictionRecordId
+  +String targetRoles
+  +Boolean isRead
+  +LocalDateTime createdAt
+}
+class NlpAnalysis {
+  +Long id
+  +Long machineId
+  +String rawText
+  +String failureType
+  +String riskLevel
+  +List~String~ keywords
+  +String recommendation
+  +String rootCause
+  +BigDecimal confidence
+}
+class NlpImageAnalysis {
+  +Long id
+  +Long machineId
+  +Long attachmentId
+  +String status
+  +String description
+  +String errorMessage
+  +String riskLevel
+  +List~String~ keywords
+  +String modelVersion
+  +String modelBackend
+  +BigDecimal processingTimeMs
+}
+
+%% Relations JPA
+User "*" -- "*" Role : roles
+Role "*" -- "*" Permission : permissions
+CoreMachine "1" *-- "0..*" Sensor : sensors
+Sensor "1" -- "0..*" SensorData : readings
+CoreMachine "1" -- "0..*" EnvironmentalTelemetry : telemetry
+CoreMachine "1" -- "0..*" MachineTechnicianAssignment : assignments
+MachineTechnicianAssignment "*" --> "1" User : technician
+MachineTechnicianAssignment "*" --> "1" User : assignedBy
+InventoryUsage "*" --> "1" Part : part
+ReorderRequest "*" --> "1" Part : part
+StockOrder "*" --> "1" Part : part
+StockOrder "1" -- "1" ReorderRequest : reorderRequest
+StockOrder "*" --> "0..1" Supplier : supplier
+MachineFailureReport "1" *-- "0..*" MachineFailureReportPart : requiredParts
+CostMachine "1" -- "0..*" FailureEvent : failures
+CostMachine "1" -- "0..*" MaintenanceAction : actions
+MaintenanceAction "*" -- "*" MaintenancePart : parts
+MaintenanceRapport "1" *-- "0..*" RapportPart : parts
+MaintenanceRapport "1" *-- "0..*" ChecklistItem : checklist
+SupportTicket "1" *-- "0..*" PortalMessage : messages
+
+%% Relations logiques par identifiant Long
+User .. UserPreference : userId
+CoreMachine .. SensorTelemetry : machineId
+CoreMachine .. MachineEvent : machineId
+CoreMachine .. MachineSimulationState : machineId
+CoreMachine .. Maintenance : machineId
+CoreMachine .. CoreTask : machineId
+CoreMachine .. MaintenanceRecommendation : machineId
+CoreMachine .. PredictionRecord : machineId
+CoreMachine .. PredictionHistory : machineId
+CoreMachine .. Alert : machineId
+CoreMachine .. ExpenseReport : machineId
+CoreMachine .. MaintenanceRapport : machineId
+CoreMachine .. CustomerMachineLink : machineId
+CoreMachine .. Warranty : machineId
+CoreMachine .. Invoice : machineId
+CoreMachine .. SupportTicket : machineId
+CoreMachine .. CalendarEvent : machineId
+CoreMachine .. MachineFailureReport : machineId
+CoreMachine .. PredictiveActionAudit : machineId
+CoreMachine .. Notification : machineId
+CoreMachine .. NlpAnalysis : machineId
+CoreMachine .. NlpImageAnalysis : machineId
+CoreMachine .. CostMachine : machineId
+Maintenance .. CoreTask : maintenanceId
+Maintenance .. MaintenanceRecommendation : resultingMaintenanceId
+Maintenance .. PartReservation : maintenanceId
+CoreTask .. ExpenseReport : maintenanceTaskId
+CoreTask .. MaintenanceRapport : taskId
+CoreTask .. CalendarEvent : taskId
+User .. Maintenance : technician / approver
+User .. Invoice : customerUserId
+User .. SupportTicket : customer / assignee
+User .. CustomerMachineLink : userId
+User .. PartReservation : reservedBy
+User .. ReorderRequest : requestedBy / approvedBy
+PredictionRecord .. Notification : predictionRecordId
+SupportTicket .. PortalMessage : ticketId
+Attachment .. NlpImageAnalysis : attachmentId
+Part .. PartReservation : partId
+Part .. MachineFailureReportPart : partId
+WorkOrderTemplate .. RecurringMaintenanceRule : workOrderTemplateId
+RecurringMaintenanceRule .. CoreMachine : machineId
+RecurringMaintenanceRule .. Maintenance : generatedMaintenanceId

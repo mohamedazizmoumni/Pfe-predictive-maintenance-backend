@@ -1,0 +1,266 @@
+classDiagram
+direction LR
+
+%% Version compacte pour presentation et impression
+
+namespace "UTILISATEURS" {
+  class User {
+    +Long id
+    +String username
+    +String email
+    +UserStatus status
+  }
+  class Role {
+    +Long id
+    +String name
+  }
+  class Permission {
+    +Long id
+    +String name
+  }
+  class UserStatus {
+    <<enumeration>>
+    ACTIVE
+    INACTIVE
+    LOCKED
+  }
+}
+
+namespace "MACHINES ET CAPTEURS" {
+  class Machine {
+    +Long id
+    +String serialNumber
+    +String name
+    +String status
+    +Double riskScore
+  }
+  class Sensor {
+    +Long id
+    +String code
+    +String type
+    +String unit
+  }
+  class SensorData {
+    +Long id
+    +Double value
+    +LocalDateTime recordedDate
+    +Boolean anomaly
+  }
+  class Telemetry {
+    +Long id
+    +Long machineId
+    +LocalDateTime timestamp
+    +Double sensorValues
+  }
+  class MachineEvent {
+    +Long id
+    +Long machineId
+    +String eventType
+    +String severity
+    +Boolean acknowledged
+  }
+}
+
+namespace "MAINTENANCE" {
+  class Maintenance {
+    +Long id
+    +Long machineId
+    +MaintenanceType type
+    +MaintenanceStatus status
+    +LocalDateTime scheduledDate
+    +Long technicianId
+  }
+  class Task {
+    +Long id
+    +String title
+    +String status
+    +Long machineId
+    +Long maintenanceId
+  }
+  class Recommendation {
+    +Long id
+    +Long machineId
+    +String action
+    +Double failureProbability
+    +RecommendationStatus status
+  }
+  class Assignment {
+    +Long id
+    +Long machineId
+    +Long technicianId
+    +LocalDateTime assignedAt
+  }
+  class MaintenanceType {
+    <<enumeration>>
+    PREVENTIVE
+    CORRECTIVE
+    PREDICTIVE
+  }
+  class MaintenanceStatus {
+    <<enumeration>>
+    PLANNED
+    IN_PROGRESS
+    COMPLETED
+    CANCELLED
+  }
+  class RecommendationStatus {
+    <<enumeration>>
+    PENDING
+    APPROVED
+    REJECTED
+  }
+}
+
+namespace "PREDICTION" {
+  class Prediction {
+    +Long id
+    +Long machineId
+    +Double rulValue
+    +Double confidence
+    +String riskLevel
+    +LocalDateTime predictedAt
+  }
+}
+
+namespace "ALERTES" {
+  class Alert {
+    +Long id
+    +Long machineId
+    +String title
+    +String severity
+    +String status
+    +Double anomalyProbability
+  }
+  class Notification {
+    +Long id
+    +Long machineId
+    +Long predictionId
+    +String title
+    +Boolean isRead
+  }
+}
+
+namespace "STOCK" {
+  class Part {
+    +Long id
+    +String partNumber
+    +String name
+    +Integer currentStock
+    +Integer minimumStock
+    +BigDecimal cost
+  }
+  class Supplier {
+    +Long id
+    +String name
+    +String email
+    +Integer leadTimeDays
+  }
+  class PartReservation {
+    +Long id
+    +Long partId
+    +Long maintenanceId
+    +Integer quantity
+    +String status
+  }
+  class ReorderRequest {
+    +Long id
+    +Long partId
+    +Integer quantity
+    +String status
+  }
+  class StockOrder {
+    +Long id
+    +Long partId
+    +Long supplierId
+    +Integer quantity
+    +String status
+  }
+}
+
+namespace "FINANCE" {
+  class AnnualBudget {
+    +Long id
+    +Integer year
+    +BigDecimal totalBudget
+    +BigDecimal spentAmount
+  }
+  class ExpenseReport {
+    +Long id
+    +Long machineId
+    +BigDecimal amount
+    +String category
+    +String status
+  }
+  class MaintenanceReport {
+    +Long id
+    +Long taskId
+    +Long machineId
+    +BigDecimal totalCost
+    +String status
+  }
+}
+
+namespace "NLP" {
+  class NlpAnalysis {
+    +Long id
+    +Long machineId
+    +String failureType
+    +String riskLevel
+    +BigDecimal confidence
+  }
+  class NlpImageAnalysis {
+    +Long id
+    +Long machineId
+    +Long attachmentId
+    +String status
+    +String riskLevel
+  }
+  class Attachment {
+    +Long id
+    +String fileName
+    +String contentType
+    +Long uploadedBy
+  }
+}
+
+namespace "AUDIT" {
+  class AuditEvent {
+    +Long id
+    +String actor
+    +String action
+    +String entityType
+    +Long entityId
+    +LocalDateTime createdAt
+  }
+}
+
+%% Relations JPA et relations metier explicites
+User "*" -- "*" Role : roles
+Role "*" -- "*" Permission : permissions
+Machine "1" *-- "0..*" Sensor : sensors
+Sensor "1" -- "0..*" SensorData : readings
+Machine "1" -- "0..*" Telemetry : telemetry
+Machine "1" -- "0..*" MachineEvent : events
+Machine "1" -- "0..*" Assignment : assignments
+Assignment "*" --> "1" User : technician
+Part "1" -- "0..*" ReorderRequest : requests
+Part "1" -- "0..*" StockOrder : orders
+Supplier "1" -- "0..*" StockOrder : supplies
+Machine "1" -- "0..*" Maintenance : maintenances
+Machine "1" -- "0..*" Prediction : predictions
+Machine "1" -- "0..*" Alert : alerts
+Machine "1" -- "0..*" NlpAnalysis : analyses
+Machine "1" -- "0..*" NlpImageAnalysis : imageAnalyses
+Machine "1" -- "0..*" ExpenseReport : expenses
+Machine "1" -- "0..*" MaintenanceReport : reports
+Machine "1" -- "0..*" AuditEvent : auditEvents
+Maintenance "1" -- "0..*" Task : tasks
+Maintenance "1" -- "0..*" PartReservation : reservations
+Maintenance "1" -- "0..*" Recommendation : recommendations
+Task "1" -- "0..*" MaintenanceReport : report
+Prediction "1" -- "0..*" Alert : triggers
+Prediction "1" -- "0..*" Notification : notifications
+Part "1" -- "0..*" PartReservation : reservations
+NlpAnalysis "1" -- "0..*" AuditEvent : auditTrail
+NlpImageAnalysis "*" --> "1" Attachment : attachment
+User "1" -- "0..*" AuditEvent : actor
