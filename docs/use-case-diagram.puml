@@ -1,0 +1,149 @@
+@startuml
+!theme plain
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+    BackgroundColor #F8FAFC
+    BorderColor #334155
+    ArrowColor #475569
+}
+skinparam package {
+    BackgroundColor #FFFFFF
+    BorderColor #64748B
+}
+
+ title Diagramme de cas d'utilisation - Sentinel Predictive Maintenance
+
+actor "Utilisateur authentifie" as AuthUser
+actor "Technicien" as Technician
+actor "Manager" as Manager
+actor "Gestionnaire stock" as StockManager
+actor "Gestionnaire finance" as FinanceManager
+actor "Administrateur" as Admin
+actor "Super administrateur" as SuperAdmin
+actor "Client" as Customer
+actor "Capteur industriel /\nPlanificateur" as Sensor
+actor "Service ML FastAPI" as ML
+actor "Serveur SMTP" as SMTP
+
+Technician --|> AuthUser
+Manager --|> AuthUser
+StockManager --|> AuthUser
+FinanceManager --|> AuthUser
+Admin --|> AuthUser
+SuperAdmin --|> Admin
+
+rectangle "Sentinel Predictive Maintenance Backend" {
+    package "Authentification et comptes" {
+        usecase "S'authentifier par\nidentifiants" as UC_Login
+        usecase "S'authentifier par\nreconnaissance faciale" as UC_FaceLogin
+        usecase "Enregistrer son visage" as UC_FaceEnroll
+        usecase "Gerer son profil" as UC_Profile
+        usecase "Gerer les utilisateurs\net leurs roles" as UC_Users
+    }
+
+    package "Surveillance et intelligence predictive" {
+        usecase "Consulter le tableau\nde bord" as UC_Dashboard
+        usecase "Consulter les machines\net leur etat" as UC_Machines
+        usecase "Envoyer les donnees\ntelemetriques" as UC_Telemetry
+        usecase "Generer une prediction\nRUL / anomalie" as UC_Predict
+        usecase "Consulter l'historique\ndes predictions" as UC_History
+        usecase "Recevoir les mises a jour\ntemps reel" as UC_Realtime
+        usecase "Consulter et traiter\nles alertes" as UC_Alerts
+        usecase "Recevoir une notification\nd'alerte" as UC_Notify
+        usecase "Poser une question au\nchatbot de diagnostic" as UC_Chatbot
+    }
+
+    package "Maintenance" {
+        usecase "Creer et suivre une\nintervention" as UC_WorkOrder
+        usecase "Affecter une intervention\na un technicien" as UC_Assign
+        usecase "Soumettre un rapport\nde maintenance" as UC_Report
+        usecase "Approuver une intervention\nou une recommandation" as UC_Approve
+        usecase "Consulter l'historique\nde maintenance" as UC_MaintHistory
+    }
+
+    package "Stocks et finances" {
+        usecase "Gerer les pieces et\nle stock" as UC_Inventory
+        usecase "Traiter les demandes\nde reapprovisionnement" as UC_Reorder
+        usecase "Gerer les depenses,\ncouts et factures" as UC_Finance
+        usecase "Consulter les indicateurs\nfinanciers" as UC_FinanceDashboard
+    }
+
+    package "Portail client" {
+        usecase "Consulter ses machines\nliees" as UC_CustomerMachines
+        usecase "Consulter garanties\net factures" as UC_Billing
+        usecase "Creer et suivre un\nticket support" as UC_Ticket
+        usecase "Echanger des messages\nsur un ticket" as UC_Messages
+    }
+}
+
+' Authentification et comptes
+AuthUser --> UC_Login
+AuthUser --> UC_FaceLogin
+AuthUser --> UC_FaceEnroll
+AuthUser --> UC_Profile
+Admin --> UC_Users
+
+' Surveillance
+AuthUser --> UC_Dashboard
+AuthUser --> UC_Machines
+Technician --> UC_Telemetry
+Manager --> UC_Telemetry
+Sensor --> UC_Telemetry
+AuthUser --> UC_History
+AuthUser --> UC_Realtime
+Technician --> UC_Alerts
+Manager --> UC_Alerts
+Admin --> UC_Alerts
+AuthUser --> UC_Chatbot
+
+UC_Telemetry .> UC_Predict : <<include>>
+UC_Predict .> UC_Alerts : <<extend>>
+UC_Alerts .> UC_Notify : <<include>>
+UC_Realtime .> UC_Machines : <<include>>
+
+' Maintenance
+Technician --> UC_WorkOrder
+Technician --> UC_Report
+Manager --> UC_WorkOrder
+Manager --> UC_Assign
+Manager --> UC_Approve
+Manager --> UC_MaintHistory
+Admin --> UC_Approve
+
+' Stocks et finances
+StockManager --> UC_Inventory
+StockManager --> UC_Reorder
+Manager --> UC_Reorder
+FinanceManager --> UC_Finance
+FinanceManager --> UC_FinanceDashboard
+Admin --> UC_Finance
+
+' Portail client
+Customer --> UC_CustomerMachines
+Customer --> UC_Billing
+Customer --> UC_Ticket
+Customer --> UC_Messages
+Manager --> UC_Ticket
+Admin --> UC_Ticket
+
+' Systemes externes
+ML --> UC_Predict
+ML --> UC_FaceLogin
+ML --> UC_FaceEnroll
+ML --> UC_Chatbot
+SMTP --> UC_Notify
+
+note right of UC_Predict
+Le backend appelle le service ML avec une cle interne.
+Un calcul fallback est utilise si le service ML est indisponible.
+end note
+
+note bottom of UC_Users
+La creation et la gestion des comptes sont reservees
+aux administrateurs.
+end note
+
+@enduml

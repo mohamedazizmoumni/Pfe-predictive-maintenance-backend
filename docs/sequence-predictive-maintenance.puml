@@ -1,0 +1,94 @@
+@startuml
+!theme plain
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 120
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+ title Sequence - Pipeline de maintenance predictive
+
+ actor "Planificateur / Capteur" as Source
+ participant "DatasetReplayEngine" as Replay
+ participant "MachineStreamingService" as Streaming
+ database "PostgreSQL" as DB
+ participant "MLServiceClient" as MlClient
+ participant "FastAPI\nService ML" as FastAPI
+ participant "AlertDecisionEngine" as Decision
+ participant "AlertService" as Alerts
+ participant "NotificationService" as Notify
+ participant "Angular Frontend" as Frontend
+
+== Acquisition et prediction ==
+
+Source -> Streaming : declencher un tick de streaming
+activate Streaming
+Streaming -> DB : findAll machines
+DB --> Streaming : liste des machines
+
+loop pour chaque machine
+    Streaming -> Replay : advanceMachine(machine)
+    Replay --> Streaming : frame capteur + etat de sante
+
+    alt aucune donnee disponible
+        Streaming --> Source : ignorer la machine
+    else donnee disponible
+        Streaming -> DB : save(sensorTelemetry)
+        DB --> Streaming : telemetrie sauvegardee
+
+        Streaming -> MlClient : getPrediction(machineId, telemetry)
+        activate MlClient
+        MlClient -> FastAPI : POST /predict\nX-Internal-Key + donnees capteurs
+        activate FastAPI
+
+        alt service ML disponible
+            FastAPI --> MlClient : prediction RUL, anomalie, risque
+        else erreur reseau ou ML indisponible
+            FastAPI --> MlClient : erreur / timeout
+            MlClient --> MlClient : calcul de la prediction fallback
+        end
+        deactivate FastAPI
+        MlClient --> Streaming : prediction normalisee
+        deactivate MlClient
+
+        Streaming -> DB : update machine health
+        Streaming -> DB : save prediction history
+
+        Streaming -> Decision : decide(health, RUL, anomalie, risque)
+        Decision --> Streaming : niveau + titre + recommandation
+
+        alt severite INFO
+            Streaming -> Frontend : STOMP /topic/machines\ntelemetrie enrichie
+        else aucun incident actif
+            Streaming -> Alerts : openIncident(...)
+            activate Alerts
+            Alerts -> DB : inserer incident actif
+            DB --> Alerts : incident cree
+            Alerts -> Notify : notifier les responsables
+            Notify --> Alerts : notification envoyee
+            Alerts --> Streaming : incident ouvert
+            deactivate Alerts
+            Streaming -> Frontend : STOMP /topic/machines\nSTOMP /topic/alerts
+        else incident actif avec severite modifiee
+            Streaming -> Alerts : updateIncidentSeverity(...)
+            Alerts -> DB : mettre a jour l'incident
+            DB --> Alerts : incident mis a jour
+            Alerts --> Streaming : incident actualise
+            Streaming -> Frontend : STOMP /topic/machines\nSTOMP /topic/alerts
+        else incident actif sans changement
+            Streaming -> Frontend : STOMP /topic/machines\ntelemetrie enrichie
+        end
+    end
+end
+
+Streaming --> Source : tick termine
+ deactivate Streaming
+
+note over Source, Frontend
+Le frontend peut aussi appeler POST /api/v1/machines/{machineId}/telemetry :
+la sequence reutilise la normalisation, MlPredictionService, la persistance
+et le retour HTTP de la prediction.
+end note
+
+@enduml

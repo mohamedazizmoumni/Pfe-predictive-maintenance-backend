@@ -65,5 +65,6 @@ public class ReorderRequest {
     private LocalDateTime approvedDate;
 
     @Version
+    @Column(nullable = false)
     private Long version;
 }
